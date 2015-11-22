@@ -8,9 +8,23 @@
 
 
 #########################################################
-# Asset Data
+# logging
 #########################################################
 
+def loggingSetup(modules=[],fctn=''):
+    #Not yet working
+    import logging
+    logging.info('running %s function' % fctn)
+    try:
+        for module in modules:
+            import module
+    except:
+        logging.critical('need modules %s' % (modules,))
+
+
+#########################################################
+# Asset Data
+#########################################################
 
 def priceHist2DF(symbol=None,beginning='1990-01-01',ending=None):
     '''
@@ -82,14 +96,19 @@ def highPoint(df=None,horizon=7):
     return tempDF.drop(['startDate','endDate'], 1)
 
 
-
 def percentChange(df=None, horizon=7):
     '''
-    Creates new column in given DF. Assumes DF is standard OHLC format.
+    Expects dataframe in standard OHLCV format. Returns dataframe with new column 'percentChange'
     '''
-    df['percentChange'] = df
-
-
-
-
-if __name__==__main__:
+    import logging
+    logging.info('running percentChange')
+    try:
+        import pandas
+    except:
+        logging.critical('need pandas module.')
+        return
+    tempDF = df.copy()
+    tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
+    tempDF = highPoint(tempDF, horizon=horizon)
+    tempDF['percentChange'] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
+    return tempDF.drop(['highest','nextDayOpen'], 1)
