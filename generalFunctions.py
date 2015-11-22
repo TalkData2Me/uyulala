@@ -18,7 +18,7 @@ def priceHist2DF(symbol=None,beginning='1990-01-01',ending=None):
     Returns: pandas dataframe
     '''
     import logging
-    logging.info('running priceHist2DF')
+    logging.info('running priceHist2DF function')
     try:
         import pandas
         import datetime
@@ -58,3 +58,38 @@ def priceHist2DF(symbol=None,beginning='1990-01-01',ending=None):
             result = None
 
     return result
+
+###########################
+# Create Labels
+###########################
+
+def highPoint(df=None,horizon=7):
+    '''
+    Expects dataframe in standard OHLCV format. Returns dataframe with new column 'highest'
+    '''
+    import logging
+    logging.info('running highPoint function')
+    try:
+        import pandas
+        import datetime
+    except:
+        logging.critical('need pandas and datetime modules.')
+        return
+    tempDF = df.copy()
+    tempDF['startDate'] = tempDF.index.to_datetime()
+    tempDF['endDate'] = tempDF.index.to_datetime() + datetime.timedelta(days=horizon)
+    tempDF['highest'] = tempDF.apply(lambda row: max(tempDF.ix[row['startDate']:row['endDate'],'High']), axis=1)
+    return tempDF.drop(['startDate','endDate'], 1)
+
+
+
+def percentChange(df=None, horizon=7):
+    '''
+    Creates new column in given DF. Assumes DF is standard OHLC format.
+    '''
+    df['percentChange'] = df
+
+
+
+
+if __name__==__main__:
