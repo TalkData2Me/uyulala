@@ -8,18 +8,30 @@
 
 
 #########################################################
-# logging
+# setup
 #########################################################
 
-def loggingSetup(modules=[],fctn=''):
+def importModules(modules=[]):
     #Not yet working
     import logging
-    logging.info('running %s function' % fctn)
-    try:
-        for module in modules:
-            import module
-    except:
-        logging.critical('need modules %s' % (modules,))
+    for module in modules:
+        try: import module
+        except: logging.critical('need module %s' % module)
+
+def setSparkContext():
+    '''Usage: sc = setSparkContext()'''
+    from pyspark import SparkConf, SparkContext
+    # configuration options can be found here: http://spark.apache.org/docs/latest/configuration.html
+    conf = (SparkConf()
+             .setMaster("local[12]")
+             .setAppName("uyulala")
+             .set("spark.executor.memory", "14g"))
+    return SparkContext(conf = conf)
+
+def setSparkSQL():
+    '''Usage: sqlContext = setSparkSQL()'''
+    from pyspark.sql import SQLContext
+    return SQLContext(setSparkContext())
 
 
 #########################################################
