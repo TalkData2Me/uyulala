@@ -52,9 +52,14 @@ def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
     except:
         logging.critical('need pandas and datetime modules.')
         return
-    if int(pandas.__version__.split('.')[1]) < 17:
+    #if int(pandas.__version__.split('.')[1]) < 17:
+    #    import pandas.io.data as data
+    #else:
+    #    import pandas_datareader as data
+
+    try:
         import pandas.io.data as data
-    else:
+    except:
         import pandas_datareader as data
 
     if type(beginning) is str:

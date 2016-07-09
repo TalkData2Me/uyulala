@@ -8,7 +8,11 @@
 horizonDays = 2   # prediction horizon in days
 windowDays = 5    # sliding window size in days
 
-pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM', 'URA', 'YAO', 'FXI', 'DVYE', 'BKF', 'EEM', 'EPOL', 'EWS', 'IPO', 'SCHE', 'BIK', 'EDIV', 'VWO', 'DEM']
+import pandas
+df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=33&y=6&min_LatestClosePrice=11.00&fooldomain=caps.fool.com&max_LatestClosePrice=50.00&MarketCap=-1&')
+pullPriceHistFor = df.Symbol.tolist()
+
+#pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM', 'URA']
 
 historyStart = '2005-01-01'
 historyEnd = None
