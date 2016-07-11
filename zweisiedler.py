@@ -145,7 +145,7 @@ def window(df=None,windowSize=5,dropNulls=True):
 
 def rowNormalize(df=None):
     '''
-    Normalizes to 0-1 by row across all numeric values
+    Normalizes by row across all numeric values with smallest value mapped to 1
     '''
     tempDF = df.copy()
     numericCols = tempDF.select_dtypes(include=['floating','float64']).columns
@@ -167,6 +167,11 @@ def preprocess(symbol='',beginning='1990-01-01',ending=None,windowSize=10,horizo
         df = df.dropna()
     return df.merge(norm,on=['datetime','symbol'],how='inner')
 
+def inf2null(df=None):
+    import numpy
+    tempDF = df.copy()
+    tempDF = tempDF.replace([numpy.inf, -numpy.inf], numpy.nan)
+    return tempDF
 
 ###########################
 # Create Labels
