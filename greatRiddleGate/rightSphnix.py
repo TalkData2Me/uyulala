@@ -66,7 +66,7 @@ evaluated = pandas.DataFrame()
 for asset in evaluate:
     tempDF = df[df.symbol==asset].copy()
     for i in range(1,20,2):
-        knn = neighbors.KNeighborsRegressor(n_neighbors=i, weights='distance')
+        knn = neighbors.KNeighborsRegressor(n_neighbors=i, weights='distance', n_jobs=-1)
         knn.fit(existing.dropna().filter(regex=("t-.*")),existing.dropna().label)
         tempDF['pred-'+str(i)] = knn.predict(tempDF.filter(regex=("t-.*")))
     lm = LinearRegression(n_jobs=-1)
