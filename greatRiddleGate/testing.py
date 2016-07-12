@@ -42,11 +42,28 @@ from sklearn.linear_model import LinearRegression
 ##################################################################################
 
 
+with pandas.HDFStore('data.h5') as store:
+    try:
+        existing = store[datasetName]
+    except ValueError:
+        print 'No existing dataset with this horizon and window'
+
+
+knnDict={}
+for i in range(2,5,2):
+    knnDict[i] = neighbors.KNeighborsRegressor(n_neighbors=i, weights='distance', n_jobs=-1).fit(existing.dropna().filter(regex=("t-.*")),existing.dropna().label)
+
+
 def pullData(asset=''):
     try:
-        newData = uyulala.preprocess(symbol=asset,beginning=historyStart,ending=historyEnd,windowSize=window,horizon=horizon,setLabel=True,dropNulls=False)
-        newData = uyulala.inf2null(df=newData).dropna()
-        return newData
+        tempDF = uyulala.preprocess(symbol=asset,beginning=historyStart,ending=historyEnd,windowSize=window,horizon=horizon,setLabel=True,dropNulls=False)
+        tempDF = uyulala.inf2null(df=tempDF).dropna()
+        for i in range(1,5,2):
+            tempDF['pred-'+str(i)] = knnDict[i].predict(tempDF.filter(regex=("t-.*")))
+        lm = LinearRegression(n_jobs=-1)
+        lm.fit(tempDF.dropna().filter(regex=("pred-.*")),tempDF.dropna().label)
+        tempDF['pred'] = lm.predict(tempDF.filter(regex=("pred-.*")))
+        return tempDF[['datetime','symbol','pred']].tail(1)
     except:
         print 'unable to get data for '+asset
         pass
@@ -59,6 +76,5 @@ pool.close()
 pool.join()
 
 
-df = pandas.concat(results)
-df = df.reset_index(drop=True)
-print df.head()
+df = pandas.concat(results).reset_index(drop=True)
+print df.sort(columns='pred',ascending=False).head(10)
