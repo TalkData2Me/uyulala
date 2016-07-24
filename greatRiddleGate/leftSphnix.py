@@ -36,7 +36,7 @@ datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
 import uyulala
 #reload(uyulala)
 
-
+from multiprocessing import Pool
 
 import pandas
 
@@ -48,13 +48,21 @@ import pandas
 
 
 
-df = pandas.DataFrame()
-for asset in pullPriceHistFor:
+def pullData(asset=''):
     try:
-        newData = uyulala.preprocess(symbol=asset,beginning=historyStart,ending=historyEnd,windowSize=window,horizon=horizon)
-        df = pandas.concat([df,newData])
+        return uyulala.preprocess(symbol=asset,beginning=historyStart,ending=historyEnd,windowSize=window,horizon=horizon)
     except:
         pass
+
+pool = Pool(24)
+
+results = pool.map(pullData, pullPriceHistFor)
+#close the pool and wait for the work to finish
+pool.close()
+pool.join()
+
+
+df = pandas.concat(results).reset_index(drop=True)
 
 
 
