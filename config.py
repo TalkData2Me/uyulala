@@ -1,4 +1,8 @@
 
+availableCores = 24
+
+
+
 assetsToAssess=[
     'SCHA',
     'SCHX'

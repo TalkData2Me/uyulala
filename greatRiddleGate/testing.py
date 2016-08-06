@@ -31,9 +31,9 @@ from sklearn.linear_model import LinearRegression
 ###########################       Setup Calcs       ##################################
 ##################################################################################
 
-#df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=33&y=6&min_LatestClosePrice=11.00&fooldomain=caps.fool.com&max_LatestClosePrice=50.00&MarketCap=-1&')
-#evaluate = df.Symbol.tolist()
-evaluate = ['GOOG', 'AAPL']
+df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=33&y=6&min_LatestClosePrice=11.00&fooldomain=caps.fool.com&max_LatestClosePrice=50.00&MarketCap=-1&')
+evaluate = df.Symbol.tolist()
+#evaluate = ['GOOG', 'AAPL']
 
 
 d = datetime.date.today() - datetime.timedelta(days=daysOfHistoryForModelling)
@@ -78,7 +78,7 @@ def pullData(asset=''):
         lm = LinearRegression(n_jobs=-1)
         lm.fit(tempDF.dropna().filter(regex=("pred-.*")),tempDF.dropna().label)
         tempDF['pred'] = lm.predict(tempDF.filter(regex=("pred-.*")))
-        return tempDF[['datetime','symbol','pred']].tail(1)
+        return tempDF
     except:
         print 'unable to get data for '+asset
         pass
@@ -93,4 +93,5 @@ pool.join()
 
 df = pandas.concat(results).reset_index(drop=True)
 print df.sort(columns='pred',ascending=False).head(10)
+df.to_csv('uyulala_GRG_testing.csv')
 df.sort(columns='pred',ascending=False).to_excel('uyulala_GRG_results.xlsx')

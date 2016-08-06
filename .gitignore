@@ -3,6 +3,7 @@
 # ipython notebook files #
 ##########################
 #  *.ipynb
+*-checkpoint.ipynb
 
 ##########################
 #    temporary files     #
