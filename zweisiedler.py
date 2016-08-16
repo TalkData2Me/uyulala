@@ -131,16 +131,16 @@ def elongate(df=None):
     df = pandas.concat([opens,closes])
     return df[['datetime','symbol','price']].sort(['symbol','datetime']).reset_index(drop=True)
 
-def window(df=None,windowSize=5,dropNulls=True):
+def window(df=None,windowCol='price',windowSize=5,dropNulls=False):
     '''
-    Expects pandas dataframe with 'price' sorted appropriately. Returns a windowed df
+    Expects pandas dataframe sorted appropriately. Returns a windowed df
     '''
     tempDF = df.copy()
     for i in range(windowSize):
-        tempDF['t-'+str(i)] = tempDF.price.shift(i)
-    tempDF = tempDF.drop('price',axis=1)
-    if dropNulls:
-        tempDF = tempDF.dropna()
+        tempDF[windowCol+'_t-'+str(i)] = tempDF[windowCol].shift(i)
+    #tempDF = tempDF.drop('price',axis=1)
+    #if dropNulls:
+    #    tempDF = tempDF.dropna()
     return tempDF
 
 def rowNormalize(df=None):
@@ -180,20 +180,18 @@ def inf2null(df=None):
 def highPoint(df=None,horizon=7):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'highest'
+    TODO: currently this includes the current day...need to limit to sarting the next day.
     '''
     import logging
     logging.info('running highPoint function')
     try:
         import pandas
-        import datetime
     except:
         logging.critical('need pandas and datetime modules.')
         return
     tempDF = df.copy()
-    tempDF['startDate'] = tempDF.index.to_datetime()
-    tempDF['endDate'] = tempDF.index.to_datetime() + datetime.timedelta(days=horizon)
-    tempDF['highest'] = tempDF.apply(lambda row: max(tempDF.ix[row['startDate']:row['endDate'],'High']), axis=1)
-    return tempDF.drop(['startDate','endDate'], 1)
+    tempDF['highest'] = tempDF['High'].shift(-1)[::-1].rolling(window=horizon,center=False).max()
+    return tempDF
 
 
 def percentChange(df=None, horizon=7):
@@ -224,17 +222,77 @@ def buy(df=None, horizon=3, threshold=0.01):
 
 
 ###########################
-# Create Attributes
+# Create Features
 ###########################
 
-def SMAs(df=None):
+'''  TODO: Address the following
+- Directional Movement Index
+- MACD
+- On Balance Volume
+- Parabolic SAR
+- Price Channel
+X Relative Strength Index (RSI)
+X Volume Rate of Change (VROC)
+- Stochastic Oscillator
+- Bollinger Bands
+- Distance above/below SMA
+- SMA crosses (10&20 20&50, 50&200)
+- day of week, month, etc.
+- something about dividends (need to find right data source)
+- sector/industry
+- stock v. etf v. mutual fund
+'''
+
+def SMA(df=None,colToAvg=None,windowSize=10):
     '''
-    Expects a pandas dataframe in standard OHLCV format.
+    Expects a pandas dataframe df sorted in ascending order. Returns df with additional SMA column.
+    Good for average price (whether just Closed or elongated Open+Close) and average volume.
     '''
     import pandas
     tempDF = df.copy()
-    tempDF['tenDaySMA'] = pandas.rolling_mean(tempDF['Close'],window=10)
+    newColName = colToAvg+str(windowSize)+'SMA'
+    tempDF[newColName] = pandas.rolling_mean(tempDF[colToAvg],window=windowSize)
     return tempDF
+
+def VROC(df=None,windowSize=10):
+    '''
+    takes date-sorted dataframe with Volume column. returns dataframe with VROC column
+    '''
+    tempDF = df.copy()
+    tempDF['priorVolume'] = tempDF['Volume'].shift(windowSize)
+    tempDF['VROC'+str(windowSize)] = (tempDF['Volume'] - tempDF['priorVolume']) / tempDF['priorVolume']
+    tempDF.drop('priorVolume',inplace=True, axis=1)
+    return tempDF
+
+def RSI(df=None,priceCol='Close',windowSize=14):
+    '''
+    takes date-sorted dataframe with price column (Close or price)
+    '''
+    import pandas
+    tempDF = df.copy()
+    tempDF['rsiChange']=tempDF[priceCol] - tempDF[priceCol].shift(1)
+    tempDF['rsiGain']=tempDF['rsiChange'].apply(lambda x: x if x>0 else 0)
+    tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: x if x<0 else 0).abs()
+    tempDF['rsiAvgGain']=tempDF['rsiGain'].rolling(window=windowSize,center=False).sum() / windowSize
+    tempDF['rsiAvgLoss']=tempDF['rsiLoss'].rolling(window=windowSize,center=False).sum() / windowSize
+    tempDF['RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if x.rsiAvgLoss==0 else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
+    tempDF.drop(['rsiChange','rsiGain','rsiLoss','rsiAvgGain','rsiAvgLoss'],inplace=True,axis=1)
+    return tempDF
+
+
+def RSIgranular(df=None,windowSize=14):
+    '''
+    uses elongated data
+    '''
+    import pandas
+    window = 2 * windowSize
+    tempDF = RSI(elongate(df),priceCol='price',windowSize=window)
+    tempDF.rename(columns={'RSI'+str(window): 'RSIg'+str(windowSize),'symbol':'Symbol'}, inplace=True)
+    tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
+    tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
+    tempDF.drop(['datetime','price'],inplace=True,axis=1)
+    tempDF2 = df.copy()
+    return tempDF2.merge(tempDF,on=['Symbol','DateCol'], how='left')
 
 
 

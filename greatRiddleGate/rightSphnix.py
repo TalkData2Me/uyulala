@@ -3,7 +3,8 @@
 
 '''
 rightSphnix:
-* 
+* create Labels and store to disk
+* build models
 '''
 
 
@@ -26,6 +27,7 @@ windowDays = 5    # sliding window size in days
 
 from multiprocessing import Pool
 import pandas
+import os
 import uyulala
 #reload(uyulala)
 
@@ -41,7 +43,9 @@ from sklearn.linear_model import LinearRegression
 
 df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=33&y=6&min_LatestClosePrice=11.00&fooldomain=caps.fool.com&max_LatestClosePrice=50.00&MarketCap=-1&')
 evaluate = df.Symbol.tolist()
-#evaluate = ['GOOG', 'AAPL']
+
+
+evaluate = ['CHIX', 'QQQC', 'SDEM', 'URA']
 
 
 d = datetime.date.today() - datetime.timedelta(days=daysOfHistoryForModelling)
@@ -60,45 +64,42 @@ datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
 ##################################################################################
 
 
-with pandas.HDFStore('data.h5') as store:
+
+
+def createLabels(asset=''):
     try:
-        existing = store[datasetName]
-    except ValueError:
-        print 'No existing dataset with this horizon and window'
-existing = existing[existing['datetime'].dt.hour == 16] #only look at close data
-existing = existing[(existing.datetime < pandas.Timestamp(historyStart)) | (~existing.symbol.isin(evaluate))] #remove data from training set that will be used for testing
-existing = existing[existing['label'] < 0.5]
-
-knnDict={}
-for i in [10,50,200,1000]:
-    knnDict[i] = neighbors.KNeighborsRegressor(n_neighbors=i, weights='distance', n_jobs=-1).fit(existing.dropna().filter(regex=("t-.*")),existing.dropna().label)
-
-
-def pullData(asset=''):
-    print 'running data for '+asset
-    try:
-        tempDF = uyulala.preprocess(symbol=asset,beginning=historyStart,ending=historyEnd,windowSize=window,horizon=horizon,setLabel=True,dropNulls=False)
-        tempDF = tempDF[tempDF['datetime'].dt.hour == 16] #only look at close data
-        tempDF = tempDF[(tempDF['label'] < 0.5) | (tempDF['label'].isnull())]
-        tempDF = uyulala.inf2null(df=tempDF)
-        for i in [10,50,200,1000]:
-            tempDF['pred-'+str(i)] = knnDict[i].predict(tempDF.filter(regex=("t-.*")))
-        lm = LinearRegression(n_jobs=-1)
-        lm.fit(tempDF.dropna().filter(regex=("pred-.*")),tempDF.dropna().label)
-        tempDF['pred'] = lm.predict(tempDF.filter(regex=("pred-.*")))
-        return tempDF[['datetime','symbol','pred']].tail(1)
+        rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
+        labeled = uyulala.percentChange(df=rawData,horizon=7)
+        labeled.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
+        labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',asset+'.csv'),index=False)
+        return asset
     except:
-        print 'unable to get data for '+asset
+        print 'unable to create label for '+asset
         pass
 
 pool = Pool(24)
 
-results = pool.map(pullData, evaluate)
-#close the pool and wait for the work to finish
-pool.close()
+results = pool.map(createLabels, evaluate)
+
+pool.close()  #close the pool and wait for the work to finish
 pool.join()
 
 
-df = pandas.concat(results).reset_index(drop=True)
-print df.sort(columns='pred',ascending=False).head(10)
-df.sort(columns='pred',ascending=False).to_excel('uyulala_GRG_results.xlsx')
+'''
+import h2o
+h2o.init()
+
+transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'))
+labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled'))
+df = labeled.merge(transformed)
+transformedCols = transformed.columns
+transformedCols.remove('Symbol').remove('DateCol')
+
+from h2o.estimators.glm import H2OGeneralizedLinearEstimator
+glm = H2OGeneralizedLinearEstimator(family='gaussian', nfolds=10)
+glm.train(x=transformedCols,y="percentChange",training_frame=df.na_omit())
+
+from h2o.estimators.gbm import H2OGradientBoostingEstimator
+gbm = H2OGradientBoostingEstimator(distribution="gaussian",ntrees=10,max_depth=3,min_row=2,learn_rate="0.2")
+gbm.train(x=transformedCols,y="percentChange",training_frame=df.na_omit())
+'''
