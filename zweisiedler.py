@@ -176,12 +176,12 @@ def inf2null(df=None):
 ###########################
 # Create Labels
 ###########################
-
+'''
 def highPoint(df=None,horizon=7):
-    '''
-    Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'highest'
-    TODO: currently this includes the current day...need to limit to sarting the next day.
-    '''
+
+    #Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'highest'
+    #TODO: currently this includes the current day...need to limit to sarting the next day.
+
     import logging
     logging.info('running highPoint function')
     try:
@@ -192,9 +192,9 @@ def highPoint(df=None,horizon=7):
     tempDF = df.copy()
     tempDF['highest'] = tempDF['High'].shift(-1)[::-1].rolling(window=horizon,center=False).max()
     return tempDF
+'''
 
-
-def percentChange(df=None, horizon=7):
+def percentChange(df=None, horizon=7, HighOrClose='High'):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'percentChange'
     '''
@@ -207,18 +207,19 @@ def percentChange(df=None, horizon=7):
         return
     tempDF = df.copy()
     tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
-    tempDF = highPoint(tempDF, horizon=horizon)
-    tempDF['percentChange'] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
+    #tempDF = highPoint(tempDF, horizon=horizon)
+    tempDF['highest'] = tempDF[HighOrClose].shift(-2)[::-1].rolling(window=horizon,center=False).max()
+    tempDF['lab_percentChange'] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
     return tempDF.drop(['highest','nextDayOpen'], 1)
 
-def buy(df=None, horizon=3, threshold=0.01):
+def buy(df=None, horizon=7, HighOrClose='High', threshold=0.01):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'buy'
     '''
     tempDF = df.copy()
-    tempDF = percentChange(tempDF, horizon=horizon)
-    tempDF['buy'] = tempDF.percentChange >= threshold
-    return tempDF.drop(['percentChange'], 1)
+    tempDF = percentChange(tempDF, horizon=horizon, HighOrClose=HighOrClose)
+    tempDF['lab_buy'] = tempDF.feat_percentChange >= threshold
+    return tempDF.drop(['lab_percentChange'], 1)
 
 
 ###########################
@@ -226,17 +227,17 @@ def buy(df=None, horizon=3, threshold=0.01):
 ###########################
 
 '''  TODO: Address the following
-- Directional Movement Index
-- MACD
+X Directional Movement Index
+X MACD
 - On Balance Volume
-- Parabolic SAR
-- Price Channel
+X Parabolic SAR
+X Price Channel
 X Relative Strength Index (RSI)
 X Volume Rate of Change (VROC)
-- Stochastic Oscillator
+X Stochastic Oscillator
 - Bollinger Bands
-- Distance above/below SMA
-- SMA crosses (10&20 20&50, 50&200)
+X Distance above/below SMA
+X SMA crosses (10&20 20&50, 50&200)
 - day of week, month, etc.
 - something about dividends (need to find right data source)
 - sector/industry
@@ -250,9 +251,17 @@ def SMA(df=None,colToAvg=None,windowSize=10):
     '''
     import pandas
     tempDF = df.copy()
-    newColName = colToAvg+str(windowSize)+'SMA'
-    tempDF[newColName] = pandas.rolling_mean(tempDF[colToAvg],window=windowSize)
+    return pandas.rolling_mean(tempDF[colToAvg],window=windowSize)
+
+def SMARatio(df=None,colToAvg=None,windowSize1=10,windowSize2=20):
+    tempDF = df.copy()
+    newColName = 'feat_' + colToAvg+str(windowSize1)+'/'+str(windowSize2)+'SMARatio'
+    firstSMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize1)
+    secondSMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize2)
+    tempDF[newColName] = (firstSMA - secondSMA) / (firstSMA + secondSMA)
+    tempDF['feat_'+colToAvg+'DistFrom'+str(windowSize1)+'SMA'] = (tempDF[colToAvg] - firstSMA) / firstSMA
     return tempDF
+
 
 def VROC(df=None,windowSize=10):
     '''
@@ -260,7 +269,7 @@ def VROC(df=None,windowSize=10):
     '''
     tempDF = df.copy()
     tempDF['priorVolume'] = tempDF['Volume'].shift(windowSize)
-    tempDF['VROC'+str(windowSize)] = (tempDF['Volume'] - tempDF['priorVolume']) / tempDF['priorVolume']
+    tempDF['feat_VROC'+str(windowSize)] = (tempDF['Volume'] - tempDF['priorVolume']) / tempDF['priorVolume']
     tempDF.drop('priorVolume',inplace=True, axis=1)
     return tempDF
 
@@ -275,7 +284,7 @@ def RSI(df=None,priceCol='Close',windowSize=14):
     tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: x if x<0 else 0).abs()
     tempDF['rsiAvgGain']=tempDF['rsiGain'].rolling(window=windowSize,center=False).sum() / windowSize
     tempDF['rsiAvgLoss']=tempDF['rsiLoss'].rolling(window=windowSize,center=False).sum() / windowSize
-    tempDF['RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if x.rsiAvgLoss==0 else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
+    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if x.rsiAvgLoss==0 else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
     tempDF.drop(['rsiChange','rsiGain','rsiLoss','rsiAvgGain','rsiAvgLoss'],inplace=True,axis=1)
     return tempDF
 
@@ -287,7 +296,65 @@ def RSIgranular(df=None,windowSize=14):
     import pandas
     window = 2 * windowSize
     tempDF = RSI(elongate(df),priceCol='price',windowSize=window)
-    tempDF.rename(columns={'RSI'+str(window): 'RSIg'+str(windowSize),'symbol':'Symbol'}, inplace=True)
+    tempDF.rename(columns={'feat_RSI'+str(window): 'feat_RSIg'+str(windowSize),'symbol':'Symbol'}, inplace=True)
+    tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
+    tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
+    tempDF.drop(['datetime','price'],inplace=True,axis=1)
+    tempDF2 = df.copy()
+    return tempDF2.merge(tempDF,on=['Symbol','DateCol'], how='left')
+
+def DMI(df=None,windowSize=14):
+    '''
+    Assumes df has High, Low, and Close columns
+    '''
+    import pandas
+    tempDF = df.copy()
+    tempDF['upMove'] = tempDF['High'] - tempDF['High'].shift(1)
+    tempDF['downMove'] = tempDF['Low'].shift(1) - tempDF['Low']
+
+    tempDF['posDM'] = tempDF.apply(lambda x: x['upMove'] if x['upMove'] > x['downMove'] and x['upMove']>0 else 0, axis=1)
+    tempDF['negDM'] = tempDF.apply(lambda x: x['downMove'] if x['downMove'] > x['upMove'] and x['downMove']>0 else 0, axis=1)
+
+    tempDF['high-low'] = tempDF['High'] - tempDF['Low']
+    tempDF['high-close'] = abs(tempDF['High'] - tempDF['Close'].shift(1))
+    tempDF['low-close'] = abs(tempDF['Low'] - tempDF['Close'].shift(1))
+    tempDF['TR'] = tempDF[['high-low','high-close','low-close']].max(axis=1)
+
+    tempDF['posDI'] = pandas.ewma(tempDF['posDM'] / tempDF['TR'],span=windowSize)
+    tempDF['negDI'] = pandas.ewma(tempDF['negDM'] / tempDF['TR'],span=windowSize)
+
+
+    tempDF['feat_DIRatio'+ str(windowSize)] = pandas.ewma(100 * (tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
+    tempDF['feat_ADX'+ str(windowSize)] = pandas.ewma(100 * abs(tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
+    tempDF['feat_DMI'+ str(windowSize)] = (tempDF['feat_ADX'+ str(windowSize)] * tempDF['feat_DIRatio'+ str(windowSize)]) / 100
+
+    tempDF = tempDF.drop(['upMove','downMove','posDM','negDM','high-low','high-close','low-close','TR','posDI','negDI'],axis=1)
+    return tempDF
+
+
+def MACD(df=None,colToAvg=None,windowSizes=[9,12,26]):
+    import pandas
+    tempDF = df.copy()
+    newColName = 'feat_' + colToAvg+str(windowSizes[0])+str(windowSizes[1])+str(windowSizes[2])+'MACD'
+    secondEMA = pandas.ewma(df[colToAvg],span=windowSizes[1])
+    thirdEMA = pandas.ewma(df[colToAvg],span=windowSizes[2])
+    MACD = (secondEMA - thirdEMA)
+    signal = pandas.ewma(MACD,span=windowSizes[0])
+    tempDF[newColName] = (MACD - signal) / (MACD + signal)
+    return tempDF
+
+def MACDgranular(df=None,windowSizes=[9,12,26]):
+    '''
+    uses elongated data
+    '''
+    import pandas
+    frst = 2 * windowSizes[0]
+    scnd = 2 * windowSizes[1]
+    thrd = 2 * windowSizes[2]
+    tempDF = MACD(elongate(df),colToAvg='price',windowSizes=[frst,scnd,thrd])
+
+    tempDF.rename(columns={'feat_price' +str(frst)+str(scnd)+str(thrd)+'MACD': 'feat_' +str(windowSizes[0])+str(windowSizes[1])+str(windowSizes[2])+'MACDg','symbol':'Symbol'}, inplace=True)
+
     tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
     tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
     tempDF.drop(['datetime','price'],inplace=True,axis=1)
@@ -295,10 +362,100 @@ def RSIgranular(df=None,windowSize=14):
     return tempDF2.merge(tempDF,on=['Symbol','DateCol'], how='left')
 
 
+def StochasticOscillator(df=None,windowSize=14):
+    import pandas
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'StocOsc'
+    lowestLow = tempDF['Low'].rolling(window=windowSize,center=False).min()
+    highestHigh = tempDF['High'].rolling(window=windowSize,center=False).max()
+    K = (tempDF['Close'] - lowestLow) / (highestHigh - lowestLow) * 100
+    D = K.rolling(window=3,center=False).mean()
+    tempDF[newColName] = K
+    tempDF[newColName+'Ratio'] = (K-D) / D
+    return tempDF
+
+
+def PriceChannels(df=None,windowSize=14):
+    import pandas
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'PriceChannelDist'
+    lowestLow = tempDF['Low'].rolling(window=windowSize,center=False).min()
+    highestHigh = tempDF['High'].rolling(window=windowSize,center=False).max()
+    centerLine = (lowestLow + highestHigh) / 2
+    tempDF[newColName] = (tempDF['Close'] - centerLine) / centerLine
+    return tempDF
+
+
+def PSAR(df=None, iaf = 0.02, maxaf = 0.2):
+    import pandas
+    barsdata = df.copy()
+    length = len(barsdata)
+    dates = list(barsdata['DateCol'])
+    high = list(barsdata['High'])
+    low = list(barsdata['Low'])
+    close = list(barsdata['Close'])
+    psar = close[0:len(close)]
+    psarbull = [None] * length
+    psarbear = [None] * length
+    bull = True
+    af = iaf
+    ep = low[0]
+    hp = high[0]
+    lp = low[0]
+    for i in range(2,length):
+        if bull:
+            psar[i] = psar[i - 1] + af * (hp - psar[i - 1])
+        else:
+            psar[i] = psar[i - 1] + af * (lp - psar[i - 1])
+        reverse = False
+        if bull:
+            if low[i] < psar[i]:
+                bull = False
+                reverse = True
+                psar[i] = hp
+                lp = low[i]
+                af = iaf
+        else:
+            if high[i] > psar[i]:
+                bull = True
+                reverse = True
+                psar[i] = lp
+                hp = high[i]
+                af = iaf
+        if not reverse:
+            if bull:
+                if high[i] > hp:
+                    hp = high[i]
+                    af = min(af + iaf, maxaf)
+                if low[i - 1] < psar[i]:
+                    psar[i] = low[i - 1]
+                if low[i - 2] < psar[i]:
+                    psar[i] = low[i - 2]
+            else:
+                if low[i] < lp:
+                    lp = low[i]
+                    af = min(af + iaf, maxaf)
+                if high[i - 1] > psar[i]:
+                    psar[i] = high[i - 1]
+                if high[i - 2] > psar[i]:
+                    psar[i] = high[i - 2]
+        if bull:
+            psarbull[i] = psar[i]
+        else:
+            psarbear[i] = psar[i]
+    dictForDF = {'close':close,"psar":psar, "psarbear":psarbear, "psarbull":psarbull}
+    newDF = pandas.DataFrame(dictForDF)
+    newDF['dist'] = (newDF['close'] - newDF['psar']) / newDF['psar']
+    tempDF = df.copy()
+    tempDF['feat_PSAR'] = newDF['dist']
+    return tempDF
+
 
 ###########################
 # Create Models
 ###########################
+
+
 
 def OLD_run_model(df, model, WhichLabel, Resultant_Col_Name, sample_rate, incl_preds=False):
     '''

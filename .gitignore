@@ -16,3 +16,4 @@
 *.h5
 *.csv
 *.xlsx
+*data/*

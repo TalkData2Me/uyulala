@@ -69,7 +69,7 @@ datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
 def createLabels(asset=''):
     try:
         rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
-        labeled = uyulala.percentChange(df=rawData,horizon=7)
+        labeled = uyulala.percentChange(df=rawData,horizon=1,HighOrClose='Close')
         labeled.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',asset+'.csv'),index=False)
         return asset
@@ -85,20 +85,29 @@ pool.close()  #close the pool and wait for the work to finish
 pool.join()
 
 
-'''
+
 import h2o
 h2o.init()
 
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'))
 labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled'))
 df = labeled.merge(transformed)
-transformedCols = transformed.columns
-transformedCols.remove('Symbol').remove('DateCol')
+features = [s for s in transformed.columns if "feat_" in s]
+
+
 
 from h2o.estimators.glm import H2OGeneralizedLinearEstimator
 glm = H2OGeneralizedLinearEstimator(family='gaussian', nfolds=10)
-glm.train(x=transformedCols,y="percentChange",training_frame=df.na_omit())
+toPredict = "lab_percentChange"
+glm.train(x=features,y=toPredict,training_frame=df.na_omit())
+glm.model_id = 'model|' + toPredict + '|glm'
+h2o.h2o.save_model(glm,path=uyulala.modelsDir,force=True)
 
+
+
+
+
+'''
 from h2o.estimators.gbm import H2OGradientBoostingEstimator
 gbm = H2OGradientBoostingEstimator(distribution="gaussian",ntrees=10,max_depth=3,min_row=2,learn_rate="0.2")
 gbm.train(x=transformedCols,y="percentChange",training_frame=df.na_omit())

@@ -1,17 +1,11 @@
-import pandas
-import uyulala
+
+
 import os
 
-def createLabels(asset=''):
-    try:
-        rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol'])
-        print rawData.columns
-        labeled = uyulala.highPoint(df=rawData,horizon=7)
-        print labeled.columns
-        labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',asset+'.csv'),index=False)
-        return asset
-    except:
-        print 'unable to create label for '+asset
-        pass
+import h2o
+h2o.init()
 
-createLabels(asset = 'CHIX')
+transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'))
+
+glm = h2o.h2o.load_model(path=os.path.join(uyulala.modelsDir,'model|' + toPredict + '|glm'))
+prediction = glm.predict(transformed)
