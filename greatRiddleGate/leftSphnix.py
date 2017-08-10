@@ -25,7 +25,7 @@ import pandas
 df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=80&y=10&fooldomain=caps.fool.com&MarketCap=-1&')
 pullPriceHistFor = df.Symbol.tolist()
 
-pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM', 'URA']
+#pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM', 'URA']
 
 
 
@@ -118,7 +118,7 @@ def AddFeatures(asset=''):
 pool = Pool(uyulala.availableCores)
 
 downloadedAssets = pullPriceHistFor
-#downloadedAssets = pool.map(PullData, pullPriceHistFor)
+downloadedAssets = pool.map(PullData, pullPriceHistFor)
 
 transformedAssets = pool.map(AddFeatures, downloadedAssets)
 

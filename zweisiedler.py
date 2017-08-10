@@ -209,7 +209,9 @@ def percentChange(df=None, horizon=7, HighOrClose='High'):
     tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
     #tempDF = highPoint(tempDF, horizon=horizon)
     tempDF['highest'] = tempDF[HighOrClose].shift(-2)[::-1].rolling(window=horizon,center=False).max()
-    tempDF['lab_percentChange'] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
+
+    fieldName = 'lab_percentChange_H' + str(horizon) + HighOrClose
+    tempDF[fieldName] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
     return tempDF.drop(['highest','nextDayOpen'], 1)
 
 def buy(df=None, horizon=7, HighOrClose='High', threshold=0.01):
@@ -218,8 +220,10 @@ def buy(df=None, horizon=7, HighOrClose='High', threshold=0.01):
     '''
     tempDF = df.copy()
     tempDF = percentChange(tempDF, horizon=horizon, HighOrClose=HighOrClose)
-    tempDF['lab_buy'] = tempDF.feat_percentChange >= threshold
-    return tempDF.drop(['lab_percentChange'], 1)
+    pctChangeFieldName = 'lab_percentChange_H' + str(horizon) + HighOrClose
+    fieldName = 'lab_buy_H' + str(horizon) + HighOrClose + '_' + str(threshold)
+    tempDF[fieldName] = tempDF[pctChangeFieldName] >= threshold
+    return tempDF.drop([pctChangeFieldName], 1)
 
 
 ###########################

@@ -69,7 +69,12 @@ datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
 def createLabels(asset=''):
     try:
         rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
-        labeled = uyulala.percentChange(df=rawData,horizon=1,HighOrClose='Close')
+        # Classification
+        labeled = uyulala.buy(df=rawData,horizon=1,HighOrClose='Close',threshold=0.01)
+        # Regression
+        labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='Close')
+
+        # Clean-up
         labeled.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',asset+'.csv'),index=False)
         return asset
