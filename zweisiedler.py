@@ -58,9 +58,10 @@ def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
     #    import pandas_datareader as data
 
     try:
-        import pandas.io.data as data
-    except:
         import pandas_datareader as data
+    except:
+        import pandas.io.data as data
+
 
     if type(beginning) is str:
         beginningSplit = beginning.split('-')
@@ -255,7 +256,8 @@ def SMA(df=None,colToAvg=None,windowSize=10):
     '''
     import pandas
     tempDF = df.copy()
-    return pandas.rolling_mean(tempDF[colToAvg],window=windowSize)
+    #return pandas.rolling_mean(tempDF[colToAvg],window=windowSize)  # deprecated to the below
+    return tempDF[colToAvg].rolling(window=windowSize,center=False).mean()
 
 def SMARatio(df=None,colToAvg=None,windowSize1=10,windowSize2=20):
     tempDF = df.copy()

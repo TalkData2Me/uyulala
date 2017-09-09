@@ -9,6 +9,7 @@
 #    temporary files     #
 ##########################
 *.pyc
+*.DS_Store
 
 ##########################
 #       data files       #

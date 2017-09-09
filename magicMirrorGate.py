@@ -18,7 +18,7 @@ transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'),c
 for modelFile in glob.glob(os.path.join(uyulala.modelsDir,'model|*')):
     fileName = modelFile.split('/')[-1]
     junk,label,modelType = fileName.split('|')
-    model = h2o.h2o.load_model(path=modelFile)
+    model = h2o.load_model(path=modelFile)
     prediction = model.predict(transformed)
     #predictionDF = predictionDF.merge(h2o.as_list(prediction, use_pandas=True),left_index=True,right_index=True).rename(columns={'predict':label+'|'+modelType})
     transformed = transformed.cbind(prediction)

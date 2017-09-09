@@ -13,6 +13,8 @@ rightSphnix:
 #########################       Configure       ##################################
 ##################################################################################
 
+totalBuildTimeAllowed_seconds = 600
+
 daysOfHistoryForModelling = 180
 
 
@@ -35,6 +37,8 @@ import datetime
 import numpy
 from sklearn import neighbors
 from sklearn.linear_model import LinearRegression
+import random
+import string
 
 
 ##################################################################################
@@ -45,7 +49,7 @@ df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screen
 evaluate = df.Symbol.tolist()
 
 
-evaluate = ['CHIX', 'QQQC', 'SDEM', 'URA']
+evaluate = ['CHIX', 'QQQC', 'SDEM', 'URA']   # TODO: comment this out to run against everything
 
 
 d = datetime.date.today() - datetime.timedelta(days=daysOfHistoryForModelling)
@@ -92,28 +96,111 @@ pool.join()
 
 
 import h2o
+from h2o.automl import H2OAutoML
 h2o.init()
+
 
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'))
 labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled'))
 df = labeled.merge(transformed)
+
+
 features = [s for s in transformed.columns if "feat_" in s]
+labels = [s for s in labeled.columns if "lab_" in s]
 
 
-
-from h2o.estimators.glm import H2OGeneralizedLinearEstimator
-glm = H2OGeneralizedLinearEstimator(family='gaussian', nfolds=10)
-toPredict = "lab_percentChange"
-glm.train(x=features,y=toPredict,training_frame=df.na_omit())
-glm.model_id = 'model|' + toPredict + '|glm'
-h2o.h2o.save_model(glm,path=uyulala.modelsDir,force=True)
+timePerRun = int(totalBuildTimeAllowed_seconds / (len(labels)+2*len(labels)+2*5))
+print 'Time per run: ' + str(timePerRun) + ' seconds'
 
 
+L0Results = df[['Symbol','DateCol']]
+executionOrder = []
+for label in labels:
+    print label
+    # project_name=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(99))
+    aml = H2OAutoML(project_name=label+'0',
+                    stopping_tolerance=0.000001,
+                    max_runtime_secs = timePerRun)
+    aml.train(x=features,y=label,training_frame=df)
+    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
+    print aml.leaderboard[0,:]
+    executionOrder = executionOrder + [aml._leader_id]
+
+    preds = aml.leader.predict(df)
+    L0Results = L0Results.cbind(preds)
+
+    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    aml = None
+    del aml
 
 
+L1Results = df[['Symbol','DateCol']]
+for label in labels:
+    print label
+    aml = H2OAutoML(project_name=label+'1',
+                    stopping_tolerance=0.000001,
+                    max_runtime_secs = 2*timePerRun)
+    aml.train(x=features+[x for x in L0Results.columns if (x != 'Symbol') & (x != 'DateCol')],
+              y=label,
+              training_frame=df.merge(L0Results))
+    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
+    print aml.leaderboard[0,:]
+    executionOrder = executionOrder + [aml._leader_id]
 
-'''
-from h2o.estimators.gbm import H2OGradientBoostingEstimator
-gbm = H2OGradientBoostingEstimator(distribution="gaussian",ntrees=10,max_depth=3,min_row=2,learn_rate="0.2")
-gbm.train(x=transformedCols,y="percentChange",training_frame=df.na_omit())
-'''
+    preds = aml.leader.predict(df.merge(L0Results))
+    L1Results = L1Results.cbind(preds)
+
+    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    aml = None
+    del aml
+
+
+BuyResults = df[['Symbol','DateCol']]
+for label in ['lab_buy_H1Close_0.01']:
+    print label
+    aml = H2OAutoML(project_name=label+'_final',
+                    stopping_tolerance=0.000001,
+                    max_runtime_secs = 5*timePerRun)
+    aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
+              y=label,
+              training_frame=df.merge(L1Results))
+    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
+    print aml.leaderboard[0,:]
+    executionOrder = executionOrder + [aml._leader_id]
+
+    preds = aml.leader.predict(df.merge(L1Results))
+    BuyResults = BuyResults.cbind(preds)
+
+    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    aml = None
+    del aml
+
+
+BuyResults = BuyResults.drop(['predict','False']).set_names(['Symbol','DateCol','BuyConfidence'])
+BuyResults = BuyResults[BuyResults['BuyConfidence']>0.7]
+df = BuyResults.merge(df)
+
+
+PredictedPerformance = df[['Symbol','DateCol']]
+for label in ['lab_percentChange_H1Close']:
+    print label
+    aml = H2OAutoML(project_name=label+'_final',
+                    stopping_tolerance=0.000001,
+                    max_runtime_secs = 5*timePerRun)
+    aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
+              y=label,
+              training_frame=df.merge(L1Results))
+    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
+    print aml.leaderboard[0,:]
+    executionOrder = executionOrder + [aml._leader_id]
+
+    preds = aml.leader.predict(df.merge(L1Results))
+    PredictedPerformance = PredictedPerformance.cbind(preds)
+
+    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    aml = None
+    del aml
+
+
+with open(os.path.join(uyulala.modelsDir,"executionOrder.txt"), "w") as output:
+    output.write(str(executionOrder))
