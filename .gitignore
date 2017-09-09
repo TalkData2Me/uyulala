@@ -18,3 +18,4 @@
 *.csv
 *.xlsx
 *data/*
+*models/*
