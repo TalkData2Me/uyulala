@@ -226,28 +226,25 @@ def buy(df=None, horizon=7, HighOrClose='High', threshold=0.01):
     tempDF[fieldName] = tempDF[pctChangeFieldName] >= threshold
     return tempDF.drop([pctChangeFieldName], 1)
 
+def absolutePercentChange(df=None, horizon=7, HighOrClose='High'):
+    tempDF = df.copy()
+    tempDF = percentChange(tempDF, horizon=horizon, HighOrClose=HighOrClose)
+    pctChangeFieldName = 'lab_percentChange_H' + str(horizon) + HighOrClose
+    fieldName = 'lab_absolutePercentChange_H' + str(horizon) + HighOrClose
+    tempDF[fieldName] = tempDF[pctChangeFieldName].abs()
+    return tempDF.drop([pctChangeFieldName], 1)
+
 
 ###########################
 # Create Features
 ###########################
 
-'''  TODO: Address the following
-X Directional Movement Index
-X MACD
-- On Balance Volume
-X Parabolic SAR
-X Price Channel
-X Relative Strength Index (RSI)
-X Volume Rate of Change (VROC)
-X Stochastic Oscillator
-- Bollinger Bands
-X Distance above/below SMA
-X SMA crosses (10&20 20&50, 50&200)
-- day of week, month, etc.
-- something about dividends (need to find right data source)
-- sector/industry
-- stock v. etf v. mutual fund
-'''
+
+def DOW(df=None,dateCol=None):
+    tempDF = df.copy()
+    newColName = 'feat_DOW'
+    tempDF[newColName] = tempDF[dateCol].dt.dayofweek+1
+    return tempDF
 
 def SMA(df=None,colToAvg=None,windowSize=10):
     '''
@@ -265,9 +262,63 @@ def SMARatio(df=None,colToAvg=None,windowSize1=10,windowSize2=20):
     firstSMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize1)
     secondSMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize2)
     tempDF[newColName] = (firstSMA - secondSMA) / (firstSMA + secondSMA)
-    tempDF['feat_'+colToAvg+'DistFrom'+str(windowSize1)+'SMA'] = (tempDF[colToAvg] - firstSMA) / firstSMA
+    #tempDF['feat_'+colToAvg+'DistFrom'+str(windowSize1)+'SMA'] = (tempDF[colToAvg] - firstSMA) / firstSMA
     return tempDF
 
+def PctFromSMA(df=None,colToAvg=None,windowSize=10):
+    tempDF = df.copy()
+    newColName = 'feat_' + colToAvg+str(windowSize)+'PctFromSMA'
+    SMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize)
+    tempDF[newColName] = (tempDF[colToAvg] - SMA) / SMA
+    return tempDF
+
+def CommodityChannelIndex(df=None, windowSize=10):
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'CCI'
+    TypicalPrice = (tempDF['High'] + tempDF['Low'] + tempDF['Close']) / 3
+    RollingMean = TypicalPrice.rolling(window=windowSize,center=False).mean()
+    RollingStd = TypicalPrice.rolling(window=windowSize,center=False).std()
+    tempDF[newColName] = (TypicalPrice - RollingMean) / (0.015 * RollingStd)
+    return tempDF
+
+def EaseOfMovement(df=None, windowSize=10):
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'EMV'
+    dm = ((tempDF['High'] + tempDF['Low'])/2) - ((tempDF['High'].shift(1) + tempDF['Low'].shift(1))/2)
+    avgVol = tempDF['Volume'].rolling(window=windowSize,center=False).mean()
+    br = (tempDF['Volume'] / avgVol) / ((tempDF['High'] - tempDF['Low'])) # typically have vol/100000000 but changed to account for differences of average volume
+    tempDF[newColName] = (dm / br).rolling(window=windowSize,center=False).mean()
+    return tempDF
+
+def ForceIndex(df=None, windowSize=10):
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'FI'
+    priceChange = (tempDF['High'] - tempDF['Open'])/tempDF['Open']
+    avgVol = tempDF['Volume'].rolling(window=windowSize,center=False).mean()
+    pandas.ewma(priceChange*(tempDF['Volume']/avgVol),span=windowSize)
+    return tempDF
+
+def BollingerBands(df=None, colToAvg=None, windowSize=10):
+    tempDF = df.copy()
+    MA = tempDF[colToAvg].rolling(window=windowSize,center=False).mean()
+    SD = tempDF[colToAvg].rolling(window=windowSize,center=False).std()
+    UpperBB = MA + (2 * SD)
+    LowerBB = MA - (2 * SD)
+    tempDF['feat_' + colToAvg+str(windowSize)+'PctFromUpperBB'] = (tempDF[colToAvg] - UpperBB) / UpperBB
+    tempDF['feat_' + colToAvg+str(windowSize)+'PctFromLowerBB'] = (tempDF[colToAvg] - LowerBB) / LowerBB
+    tempDF['feat_' + colToAvg+str(windowSize)+'BBBandwidth'] = ( (UpperBB - LowerBB) / MA) * 100
+    tempDF['feat_' + colToAvg+str(windowSize)+'PctB'] = (tempDF[colToAvg] - LowerBB)/(UpperBB - LowerBB)
+    return tempDF
+
+def PROC(df=None, colToAvg=None,windowSize=10):
+    '''
+    takes date-sorted dataframe with Volume column. returns dataframe with VROC column
+    '''
+    tempDF = df.copy()
+    tempDF['priorPrice'] = tempDF[colToAvg].shift(windowSize)
+    tempDF['feat_PROC'+str(windowSize)] = (tempDF[colToAvg] - tempDF['priorPrice']) / tempDF['priorPrice']
+    tempDF.drop('priorPrice',inplace=True, axis=1)
+    return tempDF
 
 def VROC(df=None,windowSize=10):
     '''
@@ -333,6 +384,7 @@ def DMI(df=None,windowSize=14):
     tempDF['feat_DIRatio'+ str(windowSize)] = pandas.ewma(100 * (tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
     tempDF['feat_ADX'+ str(windowSize)] = pandas.ewma(100 * abs(tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
     tempDF['feat_DMI'+ str(windowSize)] = (tempDF['feat_ADX'+ str(windowSize)] * tempDF['feat_DIRatio'+ str(windowSize)]) / 100
+    tempDF['feat_AdjATR'+ str(windowSize)] = (tempDF['TR']/tempDF['High']).rolling(window=windowSize,center=False).mean()
 
     tempDF = tempDF.drop(['upMove','downMove','posDM','negDM','high-low','high-close','low-close','TR','posDI','negDI'],axis=1)
     return tempDF
@@ -456,6 +508,29 @@ def PSAR(df=None, iaf = 0.02, maxaf = 0.2):
     tempDF['feat_PSAR'] = newDF['dist']
     return tempDF
 
+def AccumulationDistributionLine(df=None,windowSize=10):
+    tempDF = df.copy()
+    newColName = 'feat_' + str(windowSize)+'ADL'
+    MoneyFlowMultiplier = [(tempDF['Close']  -  tempDF['Low']) - (tempDF['High'] - tempDF['Close'])] /(tempDF['High'] - tempDF['Low'])
+    RelativeVolume = tempDF['Volume'] / tempDF['Volume'].rolling(window=windowSize,center=False).sum()
+    AdjMoneyFlowVolume = MoneyFlowMultiplier * RelativeVolume
+    MoneyFlowVolume = MoneyFlowMultiplier * tempDF['Volume']
+    tempDF[newColName] = AdjMoneyFlowVolume.rolling(window=windowSize,center=False).sum()
+    tempDF['feat_' + str(windowSize)+'CMF'] = MoneyFlowVolume.rolling(window=windowSize,center=False).sum() / tempDF['Volume'].rolling(window=windowSize,center=False).sum()
+    tempDF['feat_' + str(windowSize)+'ChaikinOscillator'] = pandas.ewma(tempDF[newColName],span=max(1,int(windowSize/3))) - pandas.ewma(tempDF[newColName],span=windowSize)
+    return tempDF
+
+def Aroon(df=None,windowSize=10):
+    import numpy
+    tempDF = df.copy()
+    rmlagmax = lambda xs: numpy.argmax(xs[::-1])
+    DaysSinceHigh = tempDF['High'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmax)
+    rmlagmin = lambda xs: numpy.argmin(xs[::-1])
+    DaysSinceLow = tempDF['Low'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmin)
+    tempDF['feat_' + str(windowSize)+'AroonUp'] = ((windowSize - DaysSinceHigh)/windowSize) * 100
+    tempDF['feat_' + str(windowSize)+'AroonDown'] = ((windowSize - DaysSinceLow)/windowSize) * 100
+    tempDF['feat_' + str(windowSize)+'AroonOscillator'] = tempDF['feat_' + str(windowSize)+'AroonUp'] - tempDF['feat_' + str(windowSize)+'AroonDown']
+    return tempDF
 
 ###########################
 # Create Models

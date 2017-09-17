@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import pandas
 import pandas_datareader.data as web
 import matplotlib.pyplot as plt
 
@@ -29,11 +29,9 @@ for i in xrange(num_portfolios):
     weights = np.array(np.random.random(len(stocks)))
     #rebalance weights to sum to 1
     weights /= np.sum(weights)
-
     #calculate portfolio return and volatility
     portfolio_return = np.sum(mean_daily_returns * weights) * 252
     portfolio_std_dev = np.sqrt(np.dot(weights.T,np.dot(cov_matrix, weights))) * np.sqrt(252)
-
     #store results in results array
     results[0,i] = portfolio_return
     results[1,i] = portfolio_std_dev
@@ -44,7 +42,7 @@ for i in xrange(num_portfolios):
         results[j+3,i] = weights[j]
 
 #convert results array to Pandas DataFrame
-results_frame = pd.DataFrame(results.T,columns=['ret','stdev','sharpe']+stocks)
+results_frame = pandas.DataFrame(results.T,columns=['ret','stdev','sharpe']+stocks)
 
 #locate position of portfolio with highest Sharpe Ratio
 max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
