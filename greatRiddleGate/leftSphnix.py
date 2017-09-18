@@ -37,7 +37,7 @@ pullPriceHistFor = ['SCHB','SCHX','SCHV','SCHG','SCHA','SCHM','SCHD','SMD','SPYD
 
 
 historyStart = '2005-01-01'
-historyEnd = '2017-03-01' # typically set as None except for backtesting
+historyEnd = '2017-03-05' # typically set as None except for backtesting
 
 #-------------------------------------------------------------------------------#
 horizon = horizonDays*2
@@ -88,10 +88,10 @@ def AddFeatures(asset=''):
         features = uyulala.VROC(df=features,windowSize=7)
         features = uyulala.VROC(df=features,windowSize=5)
         features = uyulala.VROC(df=features,windowSize=3)
-        features = uyulala.PROC(df=features, colToAvg=None,windowSize=11)
-        features = uyulala.PROC(df=features, colToAvg=None,windowSize=7)
-        features = uyulala.PROC(df=features, colToAvg=None,windowSize=2)
-        features = uyulala.PROC(df=features, colToAvg=None,windowSize=3)
+        features = uyulala.PROC(df=features, colToAvg='High',windowSize=11)
+        features = uyulala.PROC(df=features, colToAvg='High',windowSize=7)
+        features = uyulala.PROC(df=features, colToAvg='High',windowSize=2)
+        features = uyulala.PROC(df=features, colToAvg='High',windowSize=3)
         features = uyulala.DOW(df=features,dateCol='DateCol')
         features = uyulala.RSI(df=features,priceCol='Close',windowSize=17)
         features = uyulala.RSI(df=features,priceCol='Close',windowSize=13)
@@ -139,7 +139,12 @@ def AddFeatures(asset=''):
         features = uyulala.AccumulationDistributionLine(df=features,windowSize=5)
         features = uyulala.Aroon(df=features,windowSize=10)
         features = uyulala.Aroon(df=features,windowSize=5)
-
+        features = uyulala.autocorrelation(df=features,windowSize=10,colToAvg='High',lag=1)
+        features = uyulala.autocorrelation(df=features,windowSize=5,colToAvg='High',lag=1)
+        features = uyulala.autocorrelation(df=features,windowSize=5,colToAvg='High',lag=2)
+        features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=1)
+        features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=2)
+        features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=3)
         features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         features.to_csv(os.path.join(uyulala.dataDir,'transformed',asset+'.csv'),index=False)
         return asset

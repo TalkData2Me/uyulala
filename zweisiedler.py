@@ -268,8 +268,8 @@ def SMARatio(df=None,colToAvg=None,windowSize1=10,windowSize2=20):
 def PctFromSMA(df=None,colToAvg=None,windowSize=10):
     tempDF = df.copy()
     newColName = 'feat_' + colToAvg+str(windowSize)+'PctFromSMA'
-    SMA = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize)
-    tempDF[newColName] = (tempDF[colToAvg] - SMA) / SMA
+    SMAvg = SMA(df=df,colToAvg=colToAvg,windowSize=windowSize)
+    tempDF[newColName] = (tempDF[colToAvg] - SMAvg) / SMAvg
     return tempDF
 
 def CommodityChannelIndex(df=None, windowSize=10):
@@ -291,11 +291,14 @@ def EaseOfMovement(df=None, windowSize=10):
     return tempDF
 
 def ForceIndex(df=None, windowSize=10):
+    import pandas
     tempDF = df.copy()
     newColName = 'feat_' + str(windowSize)+'FI'
     priceChange = (tempDF['High'] - tempDF['Open'])/tempDF['Open']
     avgVol = tempDF['Volume'].rolling(window=windowSize,center=False).mean()
     pandas.ewma(priceChange*(tempDF['Volume']/avgVol),span=windowSize)
+    s=priceChange*(tempDF['Volume']/avgVol)
+    tempDF[newColName] = s.ewm(ignore_na=False,span=windowSize,min_periods=windowSize,adjust=True).mean()
     return tempDF
 
 def BollingerBands(df=None, colToAvg=None, windowSize=10):
@@ -329,6 +332,10 @@ def VROC(df=None,windowSize=10):
     tempDF['feat_VROC'+str(windowSize)] = (tempDF['Volume'] - tempDF['priorVolume']) / tempDF['priorVolume']
     tempDF.drop('priorVolume',inplace=True, axis=1)
     return tempDF
+
+def autocorrelation(df=None,windowSize=10,colToAvg=None,lag=1):
+    tempDF = df.copy()
+    tempDF['feat_autocorr'+str(windowSize)+colToAvg+str(lag)] = tempDF[colToAvg].rolling(window=windowSize).corr(other=rawData[colToAvg].shift(lag))
 
 def RSI(df=None,priceCol='Close',windowSize=14):
     '''
@@ -509,9 +516,10 @@ def PSAR(df=None, iaf = 0.02, maxaf = 0.2):
     return tempDF
 
 def AccumulationDistributionLine(df=None,windowSize=10):
+    import pandas
     tempDF = df.copy()
     newColName = 'feat_' + str(windowSize)+'ADL'
-    MoneyFlowMultiplier = [(tempDF['Close']  -  tempDF['Low']) - (tempDF['High'] - tempDF['Close'])] /(tempDF['High'] - tempDF['Low'])
+    MoneyFlowMultiplier = ((tempDF['Close']  -  tempDF['Low']) - (tempDF['High'] - tempDF['Close'])) /(tempDF['High'] - tempDF['Low'])
     RelativeVolume = tempDF['Volume'] / tempDF['Volume'].rolling(window=windowSize,center=False).sum()
     AdjMoneyFlowVolume = MoneyFlowMultiplier * RelativeVolume
     MoneyFlowVolume = MoneyFlowMultiplier * tempDF['Volume']

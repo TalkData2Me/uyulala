@@ -13,7 +13,7 @@ rightSphnix:
 #########################       Configure       ##################################
 ##################################################################################
 
-totalBuildTimeAllowed_seconds = 100
+totalBuildTimeAllowed_seconds = 36000
 
 daysOfHistoryForModelling = 180
 
