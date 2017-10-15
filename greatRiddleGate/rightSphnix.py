@@ -7,20 +7,17 @@ rightSphnix:
 * build models
 '''
 
-
-
 ##################################################################################
 #########################       Configure       ##################################
 ##################################################################################
 
-totalBuildTimeAllowed_seconds = 36000
+assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
+horizon = 3       # prediction horizon in days
 
-daysOfHistoryForModelling = 180
+totalBuildTimeAllowed_seconds = 3600
 
 
-horizonDays = 2   # prediction horizon in days
-windowDays = 5    # sliding window size in days
-
+startDate = '2004-01-01'
 
 
 ##################################################################################
@@ -35,35 +32,18 @@ import uyulala
 
 import datetime
 import numpy
-from sklearn import neighbors
-from sklearn.linear_model import LinearRegression
 import random
 import string
+import subprocess
+
 
 
 ##################################################################################
-###########################       Setup Calcs       ##################################
+################# Get and transform data (run leftSphnix) ########################
 ##################################################################################
 
-### All stocks
-#df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=33&y=6&min_LatestClosePrice=11.00&fooldomain=caps.fool.com&max_LatestClosePrice=50.00&MarketCap=-1&')
-#evaluate = df.Symbol.tolist()
-
-### Schwab OneSource ETFs
-evaluate = ['SCHB','SCHX','SCHV','SCHG','SCHA','SCHM','SCHD','SMD','SPYD','MDYV','SLYV','QUS','MDYG','SLYG','DEUS','ONEV','ONEY','SHE','RSP','XLG','ONEO','SPYX','FNDX','FNDB','SPHB','FNDA','SPLV','DGRW','RFV','RPV','RZG','RPG','RZV','RFG','DGRS','SDOG','EWSC','KRMA','JHML','QQQE','RWL','RWJ','RWK','JPSE','WMCR','DWAS','SYG','SYE','SYV','DEF','JHMM','RDIV','PDP','PKW','KNOW','JPUS','JPME','ESGL','SCHF','SCHC','SCHE','FNDF','ACIM','FEU','QCAN','LOWC','QEFA','QGBR','QEMM','QJPN','QDEU','CWI','IDLV','DBEF','HFXI','DEEF','FNDE','FNDC','WDIV','JPN','DDWM','DBAW','EELV','HDAW','DBEZ','DWX','HFXJ','HFXE','JHDG','DXGE','EDIV','GMF','PAF','IDOG','DEMG','PID','DXJS','IHDG','DNL','EUSC','GXC','EDOG','DGRE','EWX','DBEM','JHMD','CQQQ','JPIN','EWEM','EEB','PIN','PIZ','PIE','JPGE','JPEU','HGI','FRN','JPEH','JPIH','JPEM','ESGF','SCHZ','SCHP','SCHR','SCHO','TLO','ZROZ','FLRN','SHM','AGGY','CORP','AGZD','BSCQ','BSCJ','BSCH','BSCK','BSCL','BSCO','BSCN','BSCP','BSCM','BSCI','HYLB','RVNU','TFI','BWZ','PGHY','AGGE','CJNK','CWB','HYLV','BSJO','BSJJ','BSJM','BSJL','BSJK','BSJN','BSJI','BSJH','HYZD','AGGP','DSUM','BWX','PCY','PHB','HYMB','IBND','HYS','DWFI','BKLN','SRLN','SCHH','NANR','RTM','RYT','RHS','GNR','GII','RGI','EWRE','RYU','RYE','RYH','RCD','RYF','GHII','MLPX','MLPA','RWO','SGDM','RWX','PBS','CGW','ENFR','BOTZ','PSAU','CROP','GRES','JHMF','JHMT','JHMH','JHMC','JHMI','JHMA','JHME','JHMS','JHMU','ZMLP','GAL','FXY','FXS','FXF','FXE','FXC','FXB','FXA','PUTW','PSK','USDU','PGX','VRP','DYLS','INKM','RLY','WDTI','MNA','CVY','QMN','QAI','LALT','SIVR','SGOL','GLDW','PPLT','PALL','GLTR','USL','GCC','USCI','BNO','UGA','UNL','CPER']
-
-
-# evaluate = ['CHIX', 'QQQC', 'SDEM', 'URA']   # TODO: comment this out to run against everything
-
-
-d = datetime.date.today() - datetime.timedelta(days=daysOfHistoryForModelling)
-#historyStart = '2016-01-01'
-historyStart = str(d)
-historyEnd = None
-
-horizon = horizonDays*2
-window = windowDays*2
-datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
+filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
+subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
 
 
 
@@ -72,18 +52,39 @@ datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
 ##################################################################################
 
 
+folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
+
+try:
+    [ os.remove(os.path.join(uyulala.dataDir,'labeled',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'labeled',folderName)) if f.endswith(".csv") ]
+except:
+    os.makedirs(os.path.join(uyulala.dataDir,'labeled',folderName))
+
+try:
+    [ os.remove(os.path.join(uyulala.modelsDir,folderName,f)) for f in os.listdir(os.path.join(uyulala.modelsDir,folderName)) if f.endswith(".csv") ]
+except:
+    os.makedirs(os.path.join(uyulala.modelsDir,folderName))
+
+
+evaluate = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+
+
+
 
 
 def createLabels(asset=''):
     try:
-        labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
+        labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
         # Supplemental labels
-        labeled = uyulala.buy(df=labeled,horizon=1,HighOrClose='High',threshold=0.01)
+        #labeled = uyulala.buy(df=labeled,horizon=1,HighOrClose='High',threshold=0.01)
         labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='High')
-        labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.01)
+        labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='Close')
+        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.01)
         labeled = uyulala.percentChange(df=labeled,horizon=2,HighOrClose='High')
-        labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.02)
-        labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.03)
+        labeled = uyulala.percentChange(df=labeled,horizon=2,HighOrClose='Close')
+        labeled = uyulala.lowPercentChange(df=labeled,horizon=2)
+        labeled = uyulala.lowPercentChange(df=labeled,horizon=3)
+        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.02)
+        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.03)
         labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.02)
         labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.03)
         labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.04)
@@ -97,7 +98,7 @@ def createLabels(asset=''):
         labeled = uyulala.percentChange(df=labeled,horizon=3,HighOrClose='High')
         # Clean-up
         labeled.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
-        labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',asset+'.csv'),index=False)
+        labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',folderName,asset+'.csv'),index=False)
         return asset
     except:
         print 'unable to create label for '+asset
@@ -120,10 +121,10 @@ try: h2o.init(max_mem_size="16G",min_mem_size="6G")
 except: h2o.init(max_mem_size="16G",min_mem_size="6G")
 
 print 'importing data'
-transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'))
-labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled'))
+transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName))
+labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName))
 df = labeled.merge(transformed)
-
+df = df.na_omit()
 
 features = [s for s in transformed.columns if "feat_" in s]
 labels = [s for s in labeled.columns if "lab_" in s]
@@ -152,7 +153,7 @@ for label in labels:
     preds = preds.set_names([aml._leader_id + '_' + s for s in preds.columns])
     L0Results = L0Results.cbind(preds)
 
-    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
     aml = None
     del aml
 
@@ -176,7 +177,7 @@ for label in labels:
     preds = preds.set_names([aml._leader_id + '_' + s for s in preds.columns])
     L1Results = L1Results.cbind(preds)
 
-    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
     aml = None
     del aml
 
@@ -197,9 +198,9 @@ for label in [labels[-2]]:
     preds = aml.leader.predict(df.merge(L1Results))
     preds = preds.drop(['predict','False']).set_names([aml._leader_id + '_True'])
     BuyResults = BuyResults.cbind(preds)
-    BuyResults = BuyResults[BuyResults[aml._leader_id + '_True']>0.6]
+    BuyResults = BuyResults[BuyResults[aml._leader_id + '_True']>0.7]
 
-    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
     aml = None
     del aml
 
@@ -223,12 +224,42 @@ for label in [labels[-1]]:
     preds = aml.leader.predict(df.merge(L1Results))
     PredictedPerformance = PredictedPerformance.cbind(preds)
 
-    h2o.save_model(model=aml.leader, path=uyulala.modelsDir, force=True)
+    h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
     aml = None
     del aml
 
+df = PredictedPerformance.merge(df)
 
-with open(os.path.join(uyulala.modelsDir,"executionOrder.txt"), "w") as output:
+with open(os.path.join(uyulala.modelsDir,folderName,"executionOrder.txt"), "w") as output:
     output.write(str(executionOrder))
+
+##################################################################################
+#########################      Backtesting      ##################################
+##################################################################################
+
+#import matplotlib.pyplot as plt
+
+raw = h2o.import_file(path=os.path.join(uyulala.dataDir,'raw',folderName))
+labelCol = labels[-1]
+pandasDF = df.merge(raw)[[labelCol,'predict','Open','Date']].as_data_frame()
+pandasDF['returnIfWrong'] = (pandasDF.Open.shift(-4) - pandasDF.Open.shift(-1)) / pandasDF.Open.shift(-1)
+maxEV = 0
+thresholdToUse = 0
+for threshold in numpy.arange(0.005,0.051,0.001):
+    pandasDF['invested'] = pandasDF.apply(lambda row: 1 if row.predict > threshold else 0,axis=1)
+    pandasDF['return'] = pandasDF.apply(lambda row: threshold if ((row.predict >= threshold) & (row[labelCol]>threshold)) else (row.returnIfWrong if ((row.predict >= threshold) & (row[labelCol]<=threshold)) else 0),axis=1)
+    pandasDF = pandasDF.dropna()
+    dailyDF = pandas.DataFrame(pandasDF.groupby(['Date'])[['return','invested']].sum())
+    dailyDF['avgReturn'] = (dailyDF['return']/dailyDF['invested']).fillna(value=0)
+    threshEV = dailyDF['avgReturn'].mean()
+    if threshEV > maxEV:
+        maxEV = threshEV
+        thresholdToUse = threshold
+        x=dailyDF['avgReturn'].values
+print 'Using a threshold of %f has an expected return of %f' %(thresholdToUse,maxEV)
+#n, bins, patches = plt.hist(x, bins=100, facecolor='g', alpha=0.75, range=(-0.05,0.05))
+
+with open(os.path.join(uyulala.modelsDir,folderName,"threshold.txt"), "w") as output:
+    output.write(str(threshold))
 
 h2o.cluster().shutdown()

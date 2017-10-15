@@ -3,59 +3,101 @@
 Read transformed data from leftSphnix and apply models built in rightSphnix
 '''
 
+##################################################################################
+#########################       Configure       ##################################
+##################################################################################
+
+assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
+horizon = 3       # prediction horizon in days
+
+
+startDate = '2017-01-01'
+
+##################################################################################
+###########################       Imports       ##################################
+##################################################################################
+
 import os
-import glob
 import pandas
 import uyulala
 import ast
 import numpy as np
 import pandas_datareader.data as web
 import matplotlib.pyplot as plt
+import sys
 
 import h2o
 try: h2o.init()
 except: h2o.init()
 
-transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed'),col_types={'DateCol':'enum'})
+##################################################################################
+################# Get and transform data (run leftSphnix) ########################
+##################################################################################
+
+filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
+subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
+
+##################################################################################
+###########################       Execute       ##################################
+##################################################################################
+
+transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',filePath),col_types={'DateCol':'enum'})
 
 maxDate = transformed[int(transformed['DateCol'].max()),'DateCol']
 transformed = transformed[transformed['DateCol']==maxDate]
+print 'The max date available is %s' % (maxDate)
 
 print 'Running predictions from all models in executionOrder.txt against all data files in transformed data directory'
 
-filePath = os.path.join(uyulala.modelsDir,'executionOrder.txt')
+filePath = os.path.join(uyulala.modelsDir,filePath,'executionOrder.txt')
 with open(filePath,'r') as f:
     executionOrder = f.read()
     executionOrder = ast.literal_eval(executionOrder)
 
 for modelName in executionOrder:
-    model = h2o.load_model(path=os.path.join(uyulala.modelsDir,modelName))
+    model = h2o.load_model(path=os.path.join(uyulala.modelsDir,filePath,modelName))
     preds = model.predict(transformed)
     preds = preds.set_names([modelName + '_' + s for s in preds.columns])
     transformed = transformed.cbind(preds)
 
 print 'Filtering to assets with highest liklihood of return'
 
+thresholdFile = os.path.join(uyulala.modelsDir,filePath,'threshold.txt')
+with open(thresholdFile,'r') as f:
+    threshold = f.read()
+    threshold = ast.literal_eval(threshold)
+
 BuySignalColumn = executionOrder[-2] + '_True'
 finalPredictionColumn = executionOrder[-1] + '_predict'
 
+'''
 transformed[transformed[finalPredictionColumn]>0.05,finalPredictionColumn] = 0.05  # cap predicted returns to 5%
 #transformed['WeightedExpectedReturn'] = transformed[BuySignalColumn] * transformed[finalPredictionColumn]
 transformed['WeightedExpectedReturn'] = (transformed[finalPredictionColumn] > 0).ifelse( transformed[BuySignalColumn] * transformed[finalPredictionColumn], transformed[finalPredictionColumn]) # if predicted return is >0, replace with that times the liklihood of being a good buy (lowers value); else, leave as is
-
-forConsideration = transformed[transformed[BuySignalColumn]>0.6]    #for testing, can set this to 0.0 for prod, use 0.6
+forConsideration = transformed[transformed[BuySignalColumn]>0.7]    #for testing, can set this to 0.0 for prod, use 0.7
 forConsideration = forConsideration[forConsideration['WeightedExpectedReturn']>0.01]
 forConsideration = forConsideration[['Symbol','WeightedExpectedReturn']]
 forConsideration = forConsideration.set_names(['Symbol','predict'])
+'''
+
+forConsideration = transformed[transformed[finalPredictionColumn]>=threshold]
+forConsideration = forConsideration[['Symbol',finalPredictionColumn]]
+forConsideration = forConsideration.set_names(['Symbol','predict'])
 
 
-
-
-print 'Setting up portfolio optimization'
-
-#list of stocks in portfolio
+# Check for early termination
 stocks = forConsideration['Symbol'].as_data_frame().iloc[:,0].tolist()
-print 'Symbols being considered: ' + str(stocks)
+if len(stocks)==0:
+    print 'No assets meet the threshold expectation. Do not invest in any today.'
+    sys.exit()
+elif len(stocks)==1:
+    print 'Only one asset meets the threshold expectation -- invest in %s today.' % stocks
+    sys.exit()
+else:
+    print 'Symbols being considered: ' + str(stocks)
+    print 'Setting up portfolio optimization'
+
+
 
 #download daily price data for each of the stocks in the portfolio
 data = web.DataReader(stocks,data_source='yahoo',start='01/01/2005')['Adj Close'].sort_index(ascending=True)
@@ -69,7 +111,7 @@ mean_daily_returns = mean_daily_returns.fillna(-0.02)
 cov_matrix = returns.cov()
 
 #set number of runs of random portfolio weights
-num_portfolios = 250000
+num_portfolios = 10000*len(stocks)
 
 #set up array to hold results
 #We have increased the size of the array to hold the weight values for each stock

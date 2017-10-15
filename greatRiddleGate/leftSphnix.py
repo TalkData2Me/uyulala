@@ -1,50 +1,13 @@
 #!/usr/bin/python
 
+### Run this with     python leftSphnix.py --assets='SchwabOneSource' --horizon=3 --start='2017-01-01' --end=None
 
 '''
 leftSphnix:
 * pulls asset data from the web (yahoo, google, etc.) and stores raw data to disk
 * transforms data and stores results to disk
 
-TODO: need to be able to pass in parameter (asset list)
 '''
-
-
-
-
-##################################################################################
-#########################       Configure       ##################################
-##################################################################################
-
-
-horizonDays = 2   # prediction horizon in days
-windowDays = 5    # sliding window size in days
-
-import pandas
-
-### All stocks
-#df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=80&y=10&fooldomain=caps.fool.com&MarketCap=-1&')
-#pullPriceHistFor = df.Symbol.tolist()
-
-### Schwab OneSource ETFs
-pullPriceHistFor = ['SCHB','SCHX','SCHV','SCHG','SCHA','SCHM','SCHD','SMD','SPYD','MDYV','SLYV','QUS','MDYG','SLYG','DEUS','ONEV','ONEY','SHE','RSP','XLG','ONEO','SPYX','FNDX','FNDB','SPHB','FNDA','SPLV','DGRW','RFV','RPV','RZG','RPG','RZV','RFG','DGRS','SDOG','EWSC','KRMA','JHML','QQQE','RWL','RWJ','RWK','JPSE','WMCR','DWAS','SYG','SYE','SYV','DEF','JHMM','RDIV','PDP','PKW','KNOW','JPUS','JPME','ESGL','SCHF','SCHC','SCHE','FNDF','ACIM','FEU','QCAN','LOWC','QEFA','QGBR','QEMM','QJPN','QDEU','CWI','IDLV','DBEF','HFXI','DEEF','FNDE','FNDC','WDIV','JPN','DDWM','DBAW','EELV','HDAW','DBEZ','DWX','HFXJ','HFXE','JHDG','DXGE','EDIV','GMF','PAF','IDOG','DEMG','PID','DXJS','IHDG','DNL','EUSC','GXC','EDOG','DGRE','EWX','DBEM','JHMD','CQQQ','JPIN','EWEM','EEB','PIN','PIZ','PIE','JPGE','JPEU','HGI','FRN','JPEH','JPIH','JPEM','ESGF','SCHZ','SCHP','SCHR','SCHO','TLO','ZROZ','FLRN','SHM','AGGY','CORP','AGZD','BSCQ','BSCJ','BSCH','BSCK','BSCL','BSCO','BSCN','BSCP','BSCM','BSCI','HYLB','RVNU','TFI','BWZ','PGHY','AGGE','CJNK','CWB','HYLV','BSJO','BSJJ','BSJM','BSJL','BSJK','BSJN','BSJI','BSJH','HYZD','AGGP','DSUM','BWX','PCY','PHB','HYMB','IBND','HYS','DWFI','BKLN','SRLN','SCHH','NANR','RTM','RYT','RHS','GNR','GII','RGI','EWRE','RYU','RYE','RYH','RCD','RYF','GHII','MLPX','MLPA','RWO','SGDM','RWX','PBS','CGW','ENFR','BOTZ','PSAU','CROP','GRES','JHMF','JHMT','JHMH','JHMC','JHMI','JHMA','JHME','JHMS','JHMU','ZMLP','GAL','FXY','FXS','FXF','FXE','FXC','FXB','FXA','PUTW','PSK','USDU','PGX','VRP','DYLS','INKM','RLY','WDTI','MNA','CVY','QMN','QAI','LALT','SIVR','SGOL','GLDW','PPLT','PALL','GLTR','USL','GCC','USCI','BNO','UGA','UNL','CPER']
-
-
-
-#pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM', 'URA']
-
-
-
-
-historyStart = '2005-01-01'
-historyEnd = '2017-03-05' # typically set as None except for backtesting
-
-#-------------------------------------------------------------------------------#
-horizon = horizonDays*2
-window = windowDays*2
-datasetName = 'Hrzn'+str(horizon)+'Wndw'+str(window)
-
-
 
 ##################################################################################
 ###########################       Imports       ##################################
@@ -59,22 +22,78 @@ from multiprocessing import Pool
 
 import pandas
 import os
+import sys
+import getopt
+
+
+
+
+##################################################################################
+#########################       Configure       ##################################
+##################################################################################
+
+assets = 'Test'
+pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM']
+horizon = 3
+start = '2017-01-01'
+end = None
+
+try:
+    options, remainder = getopt.getopt(sys.argv[1:], 'ahse', ['assets=',
+                                                             'horizon=',
+                                                             'start=',
+                                                             'end=',
+                                                             ])
+    for opt, arg in options:
+        if opt in ('-a', '--assets'):
+            assets = arg
+            pullPriceHistFor = uyulala.assetList(assets=assets)
+        elif opt in ('-h', '--horizon'):
+            horizon = arg
+        elif opt in ('-s', '--start'):
+            start = arg
+        elif opt in ('-e', '--end'):
+            end = arg
+except:
+    print 'Error in parsing input parameters'
+
+print 'Getting and transforming data'
+print 'Assets   :', assets
+print 'Horizon   :', horizon
+print 'Start Date   :', start
+print 'End Date   :', end
+
+
 
 
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
 
+folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
+
+try:
+    [ os.remove(os.path.join(uyulala.dataDir,'raw',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+except:
+    os.makedirs(os.path.join(uyulala.dataDir,'raw',folderName))
+
+try:
+    [ os.remove(os.path.join(uyulala.dataDir,'transformed',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)) if f.endswith(".csv") ]
+except:
+    os.makedirs(os.path.join(uyulala.dataDir,'transformed',folderName))
+
+
+
 
 def PullData(asset=''):
     try:
-        rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=historyStart,ending=historyEnd)
+        rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
         try:
             firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
         except:
             firstIndex = 0
         rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
-        rawData.to_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),index=False)
+        rawData.to_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),index=False)
         return asset
     except:
         print 'Unable to pull data for ' + asset
@@ -83,7 +102,7 @@ def PullData(asset=''):
 
 def AddFeatures(asset=''):
     try:
-        rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',asset+'.csv'),parse_dates=['DateCol'])
+        rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol'])
         features = uyulala.VROC(df=rawData,windowSize=11)
         features = uyulala.VROC(df=features,windowSize=7)
         features = uyulala.VROC(df=features,windowSize=5)
@@ -146,7 +165,7 @@ def AddFeatures(asset=''):
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=2)
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=3)
         features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
-        features.to_csv(os.path.join(uyulala.dataDir,'transformed',asset+'.csv'),index=False)
+        features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
         return asset
     except:
         print 'Unable to transform ' + asset
@@ -157,7 +176,7 @@ def AddFeatures(asset=''):
 
 pool = Pool(uyulala.availableCores)
 
-downloadedAssets = pullPriceHistFor
+downloadedAssets = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
 downloadedAssets = pool.map(PullData, pullPriceHistFor)
 
 transformedAssets = pool.map(AddFeatures, downloadedAssets)

@@ -38,6 +38,18 @@ def setSparkSQL():
 # Asset Data
 #########################################################
 
+def assetList(assets='Test'):
+    if assets == 'SchwabOneSource':
+        return ['SCHB','SCHX','SCHV','SCHG','SCHA','SCHM','SCHD','SMD','SPYD','MDYV','SLYV','QUS','MDYG','SLYG','DEUS','ONEV','ONEY','SHE','RSP','XLG','ONEO','SPYX','FNDX','FNDB','SPHB','FNDA','SPLV','DGRW','RFV','RPV','RZG','RPG','RZV','RFG','DGRS','SDOG','EWSC','KRMA','JHML','QQQE','RWL','RWJ','RWK','JPSE','WMCR','DWAS','SYG','SYE','SYV','DEF','JHMM','RDIV','PDP','PKW','KNOW','JPUS','JPME','ESGL','SCHF','SCHC','SCHE','FNDF','ACIM','FEU','QCAN','LOWC','QEFA','QGBR','QEMM','QJPN','QDEU','CWI','IDLV','DBEF','HFXI','DEEF','FNDE','FNDC','WDIV','JPN','DDWM','DBAW','EELV','HDAW','DBEZ','DWX','HFXJ','HFXE','JHDG','DXGE','EDIV','GMF','PAF','IDOG','DEMG','PID','DXJS','IHDG','DNL','EUSC','GXC','EDOG','DGRE','EWX','DBEM','JHMD','CQQQ','JPIN','EWEM','EEB','PIN','PIZ','PIE','JPGE','JPEU','HGI','FRN','JPEH','JPIH','JPEM','ESGF','SCHZ','SCHP','SCHR','SCHO','TLO','ZROZ','FLRN','SHM','AGGY','CORP','AGZD','BSCQ','BSCJ','BSCH','BSCK','BSCL','BSCO','BSCN','BSCP','BSCM','BSCI','HYLB','RVNU','TFI','BWZ','PGHY','AGGE','CJNK','CWB','HYLV','BSJO','BSJJ','BSJM','BSJL','BSJK','BSJN','BSJI','BSJH','HYZD','AGGP','DSUM','BWX','PCY','PHB','HYMB','IBND','HYS','DWFI','BKLN','SRLN','SCHH','NANR','RTM','RYT','RHS','GNR','GII','RGI','EWRE','RYU','RYE','RYH','RCD','RYF','GHII','MLPX','MLPA','RWO','SGDM','RWX','PBS','CGW','ENFR','BOTZ','PSAU','CROP','GRES','JHMF','JHMT','JHMH','JHMC','JHMI','JHMA','JHME','JHMS','JHMU','ZMLP','GAL','FXY','FXS','FXF','FXE','FXC','FXB','FXA','PUTW','PSK','USDU','PGX','VRP','DYLS','INKM','RLY','WDTI','MNA','CVY','QMN','QAI','LALT','SIVR','SGOL','GLDW','PPLT','PALL','GLTR','USL','GCC','USCI','BNO','UGA','UNL','CPER']
+    elif assets == 'AllStocks':
+        import pandas
+        df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=80&y=10&fooldomain=caps.fool.com&MarketCap=-1&')
+        return df.Symbol.tolist()
+    else:
+        return ['CHIX', 'QQQC', 'SDEM']
+
+
+
 def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
     '''
     Takes: asset symbol and (optionally) date range in form YYYY-MM-DD
@@ -215,6 +227,26 @@ def percentChange(df=None, horizon=7, HighOrClose='High'):
     tempDF[fieldName] = (tempDF['highest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
     return tempDF.drop(['highest','nextDayOpen'], 1)
 
+def lowPercentChange(df=None, horizon=7):
+    '''
+    Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'percentChange'
+    '''
+    import logging
+    logging.info('running percentChange')
+    try:
+        import pandas
+    except:
+        logging.critical('need pandas module.')
+        return
+    tempDF = df.copy()
+    tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
+    #tempDF = highPoint(tempDF, horizon=horizon)
+    tempDF['lowest'] = tempDF['Low'].shift(-2)[::-1].rolling(window=horizon,center=False).min()
+
+    fieldName = 'lab_lowPercentChange_H' + str(horizon)
+    tempDF[fieldName] = (tempDF['lowest'] - tempDF['nextDayOpen']) / tempDF['nextDayOpen']
+    return tempDF.drop(['lowest','nextDayOpen'], 1)
+
 def buy(df=None, horizon=7, HighOrClose='High', threshold=0.01):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'buy'
@@ -335,7 +367,8 @@ def VROC(df=None,windowSize=10):
 
 def autocorrelation(df=None,windowSize=10,colToAvg=None,lag=1):
     tempDF = df.copy()
-    tempDF['feat_autocorr'+str(windowSize)+colToAvg+str(lag)] = tempDF[colToAvg].rolling(window=windowSize).corr(other=rawData[colToAvg].shift(lag))
+    tempDF['feat_autocorr'+str(windowSize)+colToAvg+str(lag)] = tempDF[colToAvg].rolling(window=windowSize).corr(other=tempDF[colToAvg].shift(lag))
+    return tempDF
 
 def RSI(df=None,priceCol='Close',windowSize=14):
     '''
@@ -359,7 +392,8 @@ def RSIgranular(df=None,windowSize=14):
     '''
     import pandas
     window = 2 * windowSize
-    tempDF = RSI(elongate(df),priceCol='price',windowSize=window)
+    tempDF = df.copy()
+    tempDF = RSI(elongate(tempDF),priceCol='price',windowSize=window)
     tempDF.rename(columns={'feat_RSI'+str(window): 'feat_RSIg'+str(windowSize),'symbol':'Symbol'}, inplace=True)
     tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
     tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
