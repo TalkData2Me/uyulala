@@ -1,2 +1,2 @@
 
-availableCores = 12
+availableCores = 8

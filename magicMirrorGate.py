@@ -11,8 +11,10 @@ assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
 
-startDate = '2017-01-01'
+startDate = '2017-06-01'
 
+
+folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 ##################################################################################
 ###########################       Imports       ##################################
 ##################################################################################
@@ -25,23 +27,33 @@ import numpy as np
 import pandas_datareader.data as web
 import matplotlib.pyplot as plt
 import sys
+import subprocess
+import time
 
-import h2o
-try: h2o.init()
-except: h2o.init()
+
 
 ##################################################################################
 ################# Get and transform data (run leftSphnix) ########################
 ##################################################################################
+print 'downloading data'
 
 filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
 subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
+time.sleep(10)
 
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
+print 'Loading transformed data'
 
-transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',filePath),col_types={'DateCol':'enum'})
+import h2o
+try:
+    h2o.init(max_mem_size="16G",min_mem_size="6G")
+except:
+    time.sleep(20)
+    h2o.init(max_mem_size="16G",min_mem_size="6G")
+
+transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),col_types={'DateCol':'enum'})
 
 maxDate = transformed[int(transformed['DateCol'].max()),'DateCol']
 transformed = transformed[transformed['DateCol']==maxDate]
@@ -49,20 +61,20 @@ print 'The max date available is %s' % (maxDate)
 
 print 'Running predictions from all models in executionOrder.txt against all data files in transformed data directory'
 
-filePath = os.path.join(uyulala.modelsDir,filePath,'executionOrder.txt')
+filePath = os.path.join(uyulala.modelsDir,folderName,'executionOrder.txt')
 with open(filePath,'r') as f:
     executionOrder = f.read()
     executionOrder = ast.literal_eval(executionOrder)
 
 for modelName in executionOrder:
-    model = h2o.load_model(path=os.path.join(uyulala.modelsDir,filePath,modelName))
+    model = h2o.load_model(path=os.path.join(uyulala.modelsDir,folderName,modelName))
     preds = model.predict(transformed)
     preds = preds.set_names([modelName + '_' + s for s in preds.columns])
     transformed = transformed.cbind(preds)
 
 print 'Filtering to assets with highest liklihood of return'
 
-thresholdFile = os.path.join(uyulala.modelsDir,filePath,'threshold.txt')
+thresholdFile = os.path.join(uyulala.modelsDir,folderName,'threshold.txt')
 with open(thresholdFile,'r') as f:
     threshold = f.read()
     threshold = ast.literal_eval(threshold)

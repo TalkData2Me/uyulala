@@ -24,6 +24,8 @@ import pandas
 import os
 import sys
 import getopt
+import numpy
+import time
 
 
 
@@ -33,7 +35,7 @@ import getopt
 ##################################################################################
 
 assets = 'Test'
-pullPriceHistFor = ['CHIX', 'QQQC', 'SDEM']
+pullPriceHistFor = uyulala.assetList(assets=assets)
 horizon = 3
 start = '2017-01-01'
 end = None
@@ -69,7 +71,7 @@ print 'End Date   :', end
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
-
+print 'Removing existing data to be replaced'
 folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 
 try:
@@ -86,18 +88,31 @@ except:
 
 
 def PullData(asset=''):
-    try:
-        rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
+    max_retries = 5
+    minRows = 5
+    retries = 0
+    success = False
+    while retries < max_retries and not success:
         try:
-            firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
+            rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
+            rawData = rawData.replace(0,numpy.nan)
+            try:
+                firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
+            except:
+                firstIndex = 0
+            rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
+            if rawData.shape[0] >= minRows:
+                rawData.to_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),index=False)
+                return asset
+                success = True
+            else:
+                time.sleep(5)
+                retries += 1
         except:
-            firstIndex = 0
-        rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
-        rawData.to_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),index=False)
-        return asset
-    except:
+            pass
+    if not success:
         print 'Unable to pull data for ' + asset
-        pass
+
 
 
 def AddFeatures(asset=''):
@@ -166,6 +181,7 @@ def AddFeatures(asset=''):
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=3)
         features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
+        features = None
         return asset
     except:
         print 'Unable to transform ' + asset
@@ -176,10 +192,23 @@ def AddFeatures(asset=''):
 
 pool = Pool(uyulala.availableCores)
 
-downloadedAssets = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+print 'Downloading data'
 downloadedAssets = pool.map(PullData, pullPriceHistFor)
 
+#for asset in pullPriceHistFor:
+#    PullData(asset = asset)
+
+
+downloadedAssets = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+
+print 'Transforming data'
 transformedAssets = pool.map(AddFeatures, downloadedAssets)
+
+#for asset in downloadedAssets:
+#    AddFeatures(asset = asset)
+
 
 pool.close()  #close the pool and wait for the work to finish
 pool.join()
+
+print 'Data Download and Transform complete'

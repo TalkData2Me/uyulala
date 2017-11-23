@@ -14,7 +14,7 @@ rightSphnix:
 assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
-totalBuildTimeAllowed_seconds = 3600
+totalBuildTimeAllowed_seconds = 1800
 
 
 startDate = '2004-01-01'
@@ -35,6 +35,7 @@ import numpy
 import random
 import string
 import subprocess
+import time
 
 
 
@@ -60,7 +61,7 @@ except:
     os.makedirs(os.path.join(uyulala.dataDir,'labeled',folderName))
 
 try:
-    [ os.remove(os.path.join(uyulala.modelsDir,folderName,f)) for f in os.listdir(os.path.join(uyulala.modelsDir,folderName)) if f.endswith(".csv") ]
+    [ os.remove(os.path.join(uyulala.modelsDir,folderName,f)) for f in os.listdir(os.path.join(uyulala.modelsDir,folderName)) ]
 except:
     os.makedirs(os.path.join(uyulala.modelsDir,folderName))
 
@@ -117,8 +118,11 @@ results = None
 
 import h2o
 from h2o.automl import H2OAutoML
-try: h2o.init(max_mem_size="16G",min_mem_size="6G")
-except: h2o.init(max_mem_size="16G",min_mem_size="6G")
+try:
+    h2o.init(max_mem_size="16G",min_mem_size="12G")
+except:
+    time.sleep(20)
+    h2o.init(max_mem_size="16G",min_mem_size="12G")
 
 print 'importing data'
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName))
@@ -137,7 +141,7 @@ print 'running the first layer of models'
 L0Results = df[['Symbol','DateCol']]
 executionOrder = []
 for label in labels:
-    print label
+    print 'first run of '+label
     # project_name=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(99))
     aml = H2OAutoML(project_name=label+'0',
                     stopping_tolerance=0.000001,
@@ -160,7 +164,7 @@ for label in labels:
 print 'running the second layer of models'
 L1Results = df[['Symbol','DateCol']]
 for label in labels:
-    print label
+    print 'second run of '+label
     aml = H2OAutoML(project_name=label+'1',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 2*timePerRun)
@@ -184,7 +188,7 @@ for label in labels:
 print 'running the final Buy Signal model'
 BuyResults = df[['Symbol','DateCol']]
 for label in [labels[-2]]:
-    print label
+    print 'final run of '+label
     aml = H2OAutoML(project_name=label+'_final',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 5*timePerRun)
@@ -210,7 +214,7 @@ df = BuyResults.merge(df)
 
 PredictedPerformance = df[['Symbol','DateCol']]
 for label in [labels[-1]]:
-    print label
+    print 'final run of '+label
     aml = H2OAutoML(project_name=label+'_final',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 5*timePerRun)
@@ -260,6 +264,6 @@ print 'Using a threshold of %f has an expected return of %f' %(thresholdToUse,ma
 #n, bins, patches = plt.hist(x, bins=100, facecolor='g', alpha=0.75, range=(-0.05,0.05))
 
 with open(os.path.join(uyulala.modelsDir,folderName,"threshold.txt"), "w") as output:
-    output.write(str(threshold))
+    output.write(str(thresholdToUse))
 
 h2o.cluster().shutdown()
