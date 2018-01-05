@@ -11,13 +11,13 @@ rightSphnix:
 #########################       Configure       ##################################
 ##################################################################################
 
-assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
+assets = 'AllStocks'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
 totalBuildTimeAllowed_seconds = 1800
 
 
-startDate = '2004-01-01'
+startDate = '2014-01-01'
 
 
 ##################################################################################
@@ -42,6 +42,11 @@ import time
 ##################################################################################
 ################# Get and transform data (run leftSphnix) ########################
 ##################################################################################
+
+if assets!="Test":
+    import warnings
+    warnings.filterwarnings("ignore")
+
 
 filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
 subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
@@ -75,6 +80,7 @@ evaluate = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataD
 def createLabels(asset=''):
     try:
         labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
+        labeled = labeled.drop_duplicates(subset=['Date'], keep='last')
         # Supplemental labels
         #labeled = uyulala.buy(df=labeled,horizon=1,HighOrClose='High',threshold=0.01)
         labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='High')
@@ -105,33 +111,56 @@ def createLabels(asset=''):
         print 'unable to create label for '+asset
         pass
 
+
 print 'labelling data'
-pool = Pool(24)
+for i in range(0,len(evaluate),500):
+    l = evaluate[i:i+500]
+    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+    pool.map(createLabels, l)
+    pool.close()
+    pool.join()
 
-results = pool.map(createLabels, evaluate)
+print 'Done labelling data'
 
-pool.close()  #close the pool and wait for the work to finish
-pool.join()
 
-results = None
+
+
+
 
 
 import h2o
 from h2o.automl import H2OAutoML
 try:
-    h2o.init(max_mem_size="16G",min_mem_size="12G")
+    h2o.init(max_mem_size="16G",min_mem_size="14G")
 except:
     time.sleep(20)
-    h2o.init(max_mem_size="16G",min_mem_size="12G")
+    h2o.init(max_mem_size="16G",min_mem_size="14G")
 
 print 'importing data'
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName))
 labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName))
 df = labeled.merge(transformed)
 df = df.na_omit()
+print 'Data size is %s' % (df.shape,)
 
 features = [s for s in transformed.columns if "feat_" in s]
 labels = [s for s in labeled.columns if "lab_" in s]
+
+
+transformed = None
+labeled = None
+
+dataSize = sum(os.path.getsize(os.path.join(uyulala.dataDir,'transformed',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName))) + sum(os.path.getsize(os.path.join(uyulala.dataDir,'labeled',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'labeled',folderName)))
+
+ratio = (14 * 1000000000 / 8.0000000000000) / dataSize  # H2O recommends to have a cluster 4X the size of the data
+
+if ratio < 0.98:
+    df,drop = df.split_frame(ratios=[ratio])
+    drop=None
+    print 'Decreased data size to %s for better performance' % (df.shape,)
+
+
+
 
 
 timePerRun = int(totalBuildTimeAllowed_seconds / (len(labels)+2*len(labels)+2*5))

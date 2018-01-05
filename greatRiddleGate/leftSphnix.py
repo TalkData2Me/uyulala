@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-### Run this with     python leftSphnix.py --assets='SchwabOneSource' --horizon=3 --start='2017-01-01' --end=None
+### Run this with     python leftSphnix.py --assets='AllStocks' --horizon=3 --start='2004-01-01' --end=None
 
 '''
 leftSphnix:
@@ -65,7 +65,9 @@ print 'Horizon   :', horizon
 print 'Start Date   :', start
 print 'End Date   :', end
 
-
+if assets!="Test":
+    import warnings
+    warnings.filterwarnings("ignore")
 
 
 ##################################################################################
@@ -93,23 +95,20 @@ def PullData(asset=''):
     retries = 0
     success = False
     while retries < max_retries and not success:
+        rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
+        rawData = rawData.replace(0,numpy.nan)
         try:
-            rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
-            rawData = rawData.replace(0,numpy.nan)
-            try:
-                firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
-            except:
-                firstIndex = 0
-            rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
-            if rawData.shape[0] >= minRows:
-                rawData.to_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),index=False)
-                return asset
-                success = True
-            else:
-                time.sleep(5)
-                retries += 1
+            firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
         except:
-            pass
+            firstIndex = 0
+        rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
+        if rawData.shape[0] >= minRows:
+            rawData.to_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),index=False)
+            return asset
+            success = True
+        else:
+            time.sleep(5)
+            retries += 1
     if not success:
         print 'Unable to pull data for ' + asset
 
@@ -118,7 +117,8 @@ def PullData(asset=''):
 def AddFeatures(asset=''):
     try:
         rawData = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol'])
-        features = uyulala.VROC(df=rawData,windowSize=11)
+        features = rawData.drop_duplicates(subset=['Date'], keep='last')
+        features = uyulala.VROC(df=features,windowSize=11)
         features = uyulala.VROC(df=features,windowSize=7)
         features = uyulala.VROC(df=features,windowSize=5)
         features = uyulala.VROC(df=features,windowSize=3)
@@ -180,35 +180,106 @@ def AddFeatures(asset=''):
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=2)
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=3)
         features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
+        features = features.dropna()
         features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
         features = None
         return asset
     except:
         print 'Unable to transform ' + asset
-        pass
+        import traceback
+        print('%s: %s' % (asset, traceback.format_exc()))
 
 
 
 
-pool = Pool(uyulala.availableCores)
+def PullAndTransformData(asset):
+    try:
+        PullData(asset)
+        AddFeatures(asset)
+    except:
+        import traceback
+        print('%s: %s' % (asset, traceback.format_exc()))
 
-print 'Downloading data'
-downloadedAssets = pool.map(PullData, pullPriceHistFor)
 
+print 'Downloading and transforming data for %s' % (pullPriceHistFor)
+for i in range(0,len(pullPriceHistFor),400):
+    l = pullPriceHistFor[i:i+400]
+    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+    pool.map(PullAndTransformData, l)
+    pool.close()
+    pool.join()
+print 'Done pulling and transforming data'
+time.sleep(30)
+
+
+
+
+
+'''
+def PullData_wrapped(asset):
+    try:
+        PullData(asset)
+    except:
+        import traceback
+        print('%s: %s' % (asset, traceback.format_exc()))
+
+
+print 'Downloading data for %s' % (pullPriceHistFor)
+for i in range(0,len(pullPriceHistFor),500):
+    l = pullPriceHistFor[i:i+500]
+    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+    pool.map(PullData_wrapped, l)
+    pool.close()
+    pool.join()
+
+print 'Done pulling data'
+'''
+
+
+
+'''
+pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+
+print 'Downloading data for %s' % (pullPriceHistFor)
+pool.map(PullData_wrapped, pullPriceHistFor)
+print 'Done pulling data'
 #for asset in pullPriceHistFor:
 #    PullData(asset = asset)
+pool.close()  #close the pool and wait for the work to finish
+pool.join()
+'''
 
 
+
+'''
 downloadedAssets = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
 
 print 'Transforming data'
-transformedAssets = pool.map(AddFeatures, downloadedAssets)
+for i in range(0,len(downloadedAssets),500):
+    l = downloadedAssets[i:i+500]
+    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+    pool.map(AddFeatures, l)
+    pool.close()
+    pool.join()
+
+print 'Data Download and Transform complete'
+'''
+
+
+
+
+
+'''
+pool = Pool(uyulala.availableCores,maxtasksperchild=1)
+
+print 'Transforming data'
+pool.map(AddFeatures, downloadedAssets)
 
 #for asset in downloadedAssets:
 #    AddFeatures(asset = asset)
-
 
 pool.close()  #close the pool and wait for the work to finish
 pool.join()
 
 print 'Data Download and Transform complete'
+'''

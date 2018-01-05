@@ -35,6 +35,11 @@ import time
 ##################################################################################
 ################# Get and transform data (run leftSphnix) ########################
 ##################################################################################
+if assets!="Test":
+    import warnings
+    warnings.filterwarnings("ignore")
+
+
 print 'downloading data'
 
 filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')

@@ -46,7 +46,7 @@ def assetList(assets='Test'):
         df = pandas.read_csv('http://www.motleyfool.idmanagedsolutions.com/stocks/screener_alt_results.idms?csv=1&SHOW_RESULT=1&BLOCKSIZE=ALL&SORT=&ORDER=&themetype=caps&param=1&x=80&y=10&fooldomain=caps.fool.com&MarketCap=-1&')
         return df.Symbol.tolist()
     else:
-        return ['CHIX', 'QQQC', 'SDEM']
+        return ['CHIX', 'QQQC', 'SDEM','ABCDEFG']
 
 
 
@@ -381,7 +381,7 @@ def RSI(df=None,priceCol='Close',windowSize=14):
     tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: x if x<0 else 0).abs()
     tempDF['rsiAvgGain']=tempDF['rsiGain'].rolling(window=windowSize,center=False).sum() / windowSize
     tempDF['rsiAvgLoss']=tempDF['rsiLoss'].rolling(window=windowSize,center=False).sum() / windowSize
-    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if x.rsiAvgLoss==0 else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
+    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if (x.rsiAvgLoss<0.00000000001 or x.rsiAvgLoss>-0.00000000001) else 0 if (x.rsiAvgGain<0.00000000001 or x.rsiAvgGain>-0.00000000001) else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
     tempDF.drop(['rsiChange','rsiGain','rsiLoss','rsiAvgGain','rsiAvgLoss'],inplace=True,axis=1)
     return tempDF
 
