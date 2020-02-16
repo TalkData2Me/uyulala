@@ -96,6 +96,7 @@ def PullData(asset=''):
     success = False
     while retries < max_retries and not success:
         rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
+        print rawData.size
         rawData = rawData.replace(0,numpy.nan)
         try:
             firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1

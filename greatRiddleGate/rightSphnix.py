@@ -11,7 +11,7 @@ rightSphnix:
 #########################       Configure       ##################################
 ##################################################################################
 
-assets = 'AllStocks'   # Typically AllStocks, SchwabOneSource, or Test
+assets = 'Test'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
 totalBuildTimeAllowed_seconds = 1800

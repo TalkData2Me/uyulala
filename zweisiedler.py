@@ -71,6 +71,7 @@ def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
 
     try:
         import pandas_datareader as data
+        from pandas_datareader import data, wb
     except:
         import pandas.io.data as data
 
