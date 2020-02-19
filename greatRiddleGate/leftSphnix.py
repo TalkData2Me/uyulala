@@ -37,7 +37,7 @@ import time
 assets = 'Test'
 pullPriceHistFor = uyulala.assetList(assets=assets)
 horizon = 3
-start = '2017-01-01'
+start = '2019-01-01'
 end = None
 
 try:
@@ -57,13 +57,13 @@ try:
         elif opt in ('-e', '--end'):
             end = arg
 except:
-    print 'Error in parsing input parameters'
+    print('Error in parsing input parameters')
 
-print 'Getting and transforming data'
-print 'Assets   :', assets
-print 'Horizon   :', horizon
-print 'Start Date   :', start
-print 'End Date   :', end
+print('Getting and transforming data')
+print('Assets   :', assets)
+print('Horizon   :', horizon)
+print('Start Date   :', start)
+print('End Date   :', end)
 
 if assets!="Test":
     import warnings
@@ -73,7 +73,7 @@ if assets!="Test":
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
-print 'Removing existing data to be replaced'
+print('Removing existing data to be replaced')
 folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 
 try:
@@ -96,10 +96,10 @@ def PullData(asset=''):
     success = False
     while retries < max_retries and not success:
         rawData = uyulala.priceHist2PandasDF(symbol=asset,beginning=start,ending=end)
-        print rawData.size
+        #rint(rawData.size)
         rawData = rawData.replace(0,numpy.nan)
         try:
-            firstIndex = pandas.isnull(rawData).any(1).nonzero()[0].max()+1
+            firstIndex = pandas.isnull(rawData).any(1).to_numpy().nonzero()[0].max()+1
         except:
             firstIndex = 0
         rawData = rawData.iloc[firstIndex:,:].reset_index()  # get last row with a null and only include data after it
@@ -111,7 +111,7 @@ def PullData(asset=''):
             time.sleep(5)
             retries += 1
     if not success:
-        print 'Unable to pull data for ' + asset
+        print('Unable to pull data for ' + asset)
 
 
 
@@ -186,9 +186,9 @@ def AddFeatures(asset=''):
         features = None
         return asset
     except:
-        print 'Unable to transform ' + asset
+        print('Unable to transform ' + asset)
         import traceback
-        print('%s: %s' % (asset, traceback.format_exc()))
+        print(('%s: %s' % (asset, traceback.format_exc())))
 
 
 
@@ -199,17 +199,17 @@ def PullAndTransformData(asset):
         AddFeatures(asset)
     except:
         import traceback
-        print('%s: %s' % (asset, traceback.format_exc()))
+        print(('%s: %s' % (asset, traceback.format_exc())))
 
 
-print 'Downloading and transforming data for %s' % (pullPriceHistFor)
+print('Downloading and transforming data for %s' % (pullPriceHistFor))
 for i in range(0,len(pullPriceHistFor),400):
     l = pullPriceHistFor[i:i+400]
     pool = Pool(uyulala.availableCores,maxtasksperchild=1)
     pool.map(PullAndTransformData, l)
     pool.close()
     pool.join()
-print 'Done pulling and transforming data'
+print('Done pulling and transforming data')
 time.sleep(30)
 
 

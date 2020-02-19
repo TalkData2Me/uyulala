@@ -4,6 +4,6 @@ uyulalaDir = os.path.dirname(os.path.realpath(__file__))
 dataDir = os.path.join(uyulalaDir,'data')
 modelsDir = os.path.join(uyulalaDir,'models')
 
-execfile(os.path.join(uyulalaDir,'config.py'))
+exec(compile(open(os.path.join(uyulalaDir,'config.py'), "rb").read(), os.path.join(uyulalaDir,'config.py'), 'exec'))
 
-execfile(os.path.join(uyulalaDir,'zweisiedler.py'))
+exec(compile(open(os.path.join(uyulalaDir,'zweisiedler.py'), "rb").read(), os.path.join(uyulalaDir,'zweisiedler.py'), 'exec'))

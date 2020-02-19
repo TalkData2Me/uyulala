@@ -24,7 +24,7 @@ num_portfolios = 25000
 #We have increased the size of the array to hold the weight values for each stock
 results = np.zeros((3+len(stocks),num_portfolios))
 
-for i in xrange(num_portfolios):
+for i in range(num_portfolios):
     #select random weights for portfolio holdings
     weights = np.array(np.random.random(len(stocks)))
     #rebalance weights to sum to 1

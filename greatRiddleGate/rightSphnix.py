@@ -14,7 +14,7 @@ rightSphnix:
 assets = 'Test'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
-totalBuildTimeAllowed_seconds = 1800
+totalBuildTimeAllowed_seconds = 6000
 
 
 startDate = '2014-01-01'
@@ -108,11 +108,11 @@ def createLabels(asset=''):
         labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',folderName,asset+'.csv'),index=False)
         return asset
     except:
-        print 'unable to create label for '+asset
+        print('unable to create label for '+asset)
         pass
 
 
-print 'labelling data'
+print('labelling data')
 for i in range(0,len(evaluate),500):
     l = evaluate[i:i+500]
     pool = Pool(uyulala.availableCores,maxtasksperchild=1)
@@ -120,7 +120,7 @@ for i in range(0,len(evaluate),500):
     pool.close()
     pool.join()
 
-print 'Done labelling data'
+print('Done labelling data')
 
 
 
@@ -136,12 +136,12 @@ except:
     time.sleep(20)
     h2o.init(max_mem_size="16G",min_mem_size="14G")
 
-print 'importing data'
+print('importing data')
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName))
 labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName))
 df = labeled.merge(transformed)
 df = df.na_omit()
-print 'Data size is %s' % (df.shape,)
+print('Data size is %s' % (df.shape,))
 
 features = [s for s in transformed.columns if "feat_" in s]
 labels = [s for s in labeled.columns if "lab_" in s]
@@ -157,27 +157,27 @@ ratio = (14 * 1000000000 / 8.0000000000000) / dataSize  # H2O recommends to have
 if ratio < 0.98:
     df,drop = df.split_frame(ratios=[ratio])
     drop=None
-    print 'Decreased data size to %s for better performance' % (df.shape,)
+    print('Decreased data size to %s for better performance' % (df.shape,))
 
 
 
 
 
 timePerRun = int(totalBuildTimeAllowed_seconds / (len(labels)+2*len(labels)+2*5))
-print 'Time per run: ' + str(timePerRun) + ' seconds'
+print('Time per run: ' + str(timePerRun) + ' seconds')
 
-print 'running the first layer of models'
+print('running the first layer of models')
 L0Results = df[['Symbol','DateCol']]
 executionOrder = []
 for label in labels:
-    print 'first run of '+label
+    print('first run of '+label)
     # project_name=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(99))
     aml = H2OAutoML(project_name=label+'0',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = timePerRun)
     aml.train(x=features,y=label,training_frame=df)
-    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
-    print aml.leaderboard[0,:]
+    print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
+    print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     preds = aml.leader.predict(df)
@@ -190,18 +190,18 @@ for label in labels:
     aml = None
     del aml
 
-print 'running the second layer of models'
+print('running the second layer of models')
 L1Results = df[['Symbol','DateCol']]
 for label in labels:
-    print 'second run of '+label
+    print('second run of '+label)
     aml = H2OAutoML(project_name=label+'1',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 2*timePerRun)
     aml.train(x=features+[x for x in L0Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L0Results))
-    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
-    print aml.leaderboard[0,:]
+    print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
+    print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     preds = aml.leader.predict(df.merge(L0Results))
@@ -214,18 +214,18 @@ for label in labels:
     aml = None
     del aml
 
-print 'running the final Buy Signal model'
+print('running the final Buy Signal model')
 BuyResults = df[['Symbol','DateCol']]
 for label in [labels[-2]]:
-    print 'final run of '+label
+    print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 5*timePerRun)
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results))
-    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
-    print aml.leaderboard[0,:]
+    print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
+    print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     preds = aml.leader.predict(df.merge(L1Results))
@@ -243,15 +243,15 @@ df = BuyResults.merge(df)
 
 PredictedPerformance = df[['Symbol','DateCol']]
 for label in [labels[-1]]:
-    print 'final run of '+label
+    print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = 5*timePerRun)
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results))
-    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
-    print aml.leaderboard[0,:]
+    print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
+    print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     preds = aml.leader.predict(df.merge(L1Results))
@@ -289,7 +289,7 @@ for threshold in numpy.arange(0.005,0.051,0.001):
         maxEV = threshEV
         thresholdToUse = threshold
         x=dailyDF['avgReturn'].values
-print 'Using a threshold of %f has an expected return of %f' %(thresholdToUse,maxEV)
+print('Using a threshold of %f has an expected return of %f' %(thresholdToUse,maxEV))
 #n, bins, patches = plt.hist(x, bins=100, facecolor='g', alpha=0.75, range=(-0.05,0.05))
 
 with open(os.path.join(uyulala.modelsDir,folderName,"threshold.txt"), "w") as output:

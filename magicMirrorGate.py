@@ -40,7 +40,7 @@ if assets!="Test":
     warnings.filterwarnings("ignore")
 
 
-print 'downloading data'
+print('downloading data')
 
 filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
 subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
@@ -49,7 +49,7 @@ time.sleep(10)
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
-print 'Loading transformed data'
+print('Loading transformed data')
 
 import h2o
 try:
@@ -62,9 +62,9 @@ transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',fo
 
 maxDate = transformed[int(transformed['DateCol'].max()),'DateCol']
 transformed = transformed[transformed['DateCol']==maxDate]
-print 'The max date available is %s' % (maxDate)
+print('The max date available is %s' % (maxDate))
 
-print 'Running predictions from all models in executionOrder.txt against all data files in transformed data directory'
+print('Running predictions from all models in executionOrder.txt against all data files in transformed data directory')
 
 filePath = os.path.join(uyulala.modelsDir,folderName,'executionOrder.txt')
 with open(filePath,'r') as f:
@@ -77,7 +77,7 @@ for modelName in executionOrder:
     preds = preds.set_names([modelName + '_' + s for s in preds.columns])
     transformed = transformed.cbind(preds)
 
-print 'Filtering to assets with highest liklihood of return'
+print('Filtering to assets with highest liklihood of return')
 
 thresholdFile = os.path.join(uyulala.modelsDir,folderName,'threshold.txt')
 with open(thresholdFile,'r') as f:
@@ -105,14 +105,14 @@ forConsideration = forConsideration.set_names(['Symbol','predict'])
 # Check for early termination
 stocks = forConsideration['Symbol'].as_data_frame().iloc[:,0].tolist()
 if len(stocks)==0:
-    print 'No assets meet the threshold expectation. Do not invest in any today.'
+    print('No assets meet the threshold expectation. Do not invest in any today.')
     sys.exit()
 elif len(stocks)==1:
-    print 'Only one asset meets the threshold expectation -- invest in %s today.' % stocks
+    print('Only one asset meets the threshold expectation -- invest in %s today.' % stocks)
     sys.exit()
 else:
-    print 'Symbols being considered: ' + str(stocks)
-    print 'Setting up portfolio optimization'
+    print('Symbols being considered: ' + str(stocks))
+    print('Setting up portfolio optimization')
 
 
 
@@ -135,9 +135,9 @@ num_portfolios = 10000*len(stocks)
 results = np.zeros((3+len(stocks),num_portfolios))
 
 
-print 'Creating sample portfolios'
+print('Creating sample portfolios')
 
-for i in xrange(num_portfolios):
+for i in range(num_portfolios):
     #select random weights for portfolio holdings
     weightsSize = len(stocks)
     weights = np.array(np.random.random(weightsSize))
@@ -161,7 +161,7 @@ for i in xrange(num_portfolios):
 #convert results array to Pandas DataFrame
 results_frame = pandas.DataFrame(results.T,columns=['ret','stdev','sharpe']+stocks)
 
-print 'Determining optimal portfolios'
+print('Determining optimal portfolios')
 
 #locate position of portfolio with highest Sharpe Ratio
 max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
@@ -173,7 +173,7 @@ min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
 print ('Min Volatility Portfolio:')
 print(min_vol_port)
 
-print 'Plot efficient frontier'
+print('Plot efficient frontier')
 
 #create scatter plot coloured by Sharpe Ratio
 plt.scatter(results_frame.stdev,results_frame.ret,c=results_frame.sharpe,cmap='RdYlBu',s=0.5)

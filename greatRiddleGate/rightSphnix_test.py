@@ -110,11 +110,11 @@ def createLabels(asset=''):
         labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',folderName,asset+'.csv'),index=False)
         return asset
     except:
-        print 'unable to create label for '+asset
+        print('unable to create label for '+asset)
         pass
 
 
-print 'labelling data'
+print('labelling data')
 for i in range(0,len(evaluate),500):
     l = evaluate[i:i+500]
     pool = Pool(uyulala.availableCores,maxtasksperchild=1)
@@ -122,7 +122,7 @@ for i in range(0,len(evaluate),500):
     pool.close()
     pool.join()
 
-print 'Done labelling data'
+print('Done labelling data')
 
 
 
@@ -138,7 +138,7 @@ except:
     time.sleep(20)
     h2o.init(max_mem_size=uyulala.systemMemGBstr,min_mem_size=uyulala.minH2OmemGBstr)
 
-print 'importing data'
+print('importing data')
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName))
 transformed = transformed.na_omit()
 features = [s for s in transformed.columns if "feat_" in s]
@@ -164,7 +164,7 @@ transPCA = pca.predict(transformed[features])
 transformed = transformed[['Date','Symbol','DateCol']]
 transformed = transformed.cbind(transPCA)
 features = [s for s in transformed.columns if "PC" in s]
-print pca.varimp(use_pandas=False)
+print(pca.varimp(use_pandas=False))
 
 labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName))
 labeled = labeled.na_omit()
@@ -187,7 +187,7 @@ agg.train(training_frame=df,ignored_columns=['Date','Symbol','DateCol'])
 df = agg.aggregated_frame
 h2o.save_model(model=agg, path=os.path.join(uyulala.modelsDir,folderName), force=True)
 #executionOrder = executionOrder + [agg.model_id]
-print 'Reduced data size is %s' % (df.shape,)
+print('Reduced data size is %s' % (df.shape,))
 
 
 
@@ -201,24 +201,24 @@ train,test = df.split_frame(ratios=[ratio])
 h2o.remove("df")
 df=None
 
-print 'Training data size is %s' % (train.shape,)
-print 'Testing data size is %s' % (test.shape,)
+print('Training data size is %s' % (train.shape,))
+print('Testing data size is %s' % (test.shape,))
 
 
 
 timePerRun = int(totalBuildTimeAllowed_seconds / (len(labels)))
-print 'Time per run: ' + str(timePerRun) + ' seconds'
+print('Time per run: ' + str(timePerRun) + ' seconds')
 
-print 'running the first layer of models'
+print('running the first layer of models')
 for label in labels:
-    print 'first run of '+label
+    print('first run of '+label)
     # project_name=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(99))
     aml = H2OAutoML(project_name=label+'0',
                     stopping_tolerance=0.000001,
                     max_runtime_secs = timePerRun)
     aml.train(x=features,y=label,training_frame=train,leaderboard_frame=test,weights_column='counts')
-    print aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0]
-    print aml.leaderboard[0,:]
+    print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
+    print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
     preds = aml.leader.predict(test)
     preds = preds.set_names([label + '_' + s for s in preds.columns])
@@ -242,7 +242,7 @@ predict = labels[-1]+'_predict'
 buy = labels[-2]+'_predict'
 test = test[['Date','returnIfWrong',labelCol,predict,buy]]
 test = test.as_data_frame()
-print test.head(3)
+print(test.head(3))
 
 maxEV = 0
 thresholdToUse = 0
@@ -257,7 +257,7 @@ for threshold in numpy.arange(0.005,0.051,0.001):
         maxEV = threshEV
         thresholdToUse = threshold
         x=dailyDF['avgReturn'].values
-print 'Using a threshold of %f has an expected return of %f' %(thresholdToUse,maxEV)
+print('Using a threshold of %f has an expected return of %f' %(thresholdToUse,maxEV))
 #n, bins, patches = plt.hist(x, bins=100, facecolor='g', alpha=0.75, range=(-0.05,0.05))
 
 with open(os.path.join(uyulala.modelsDir,folderName,"threshold.txt"), "w") as output:

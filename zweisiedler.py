@@ -59,21 +59,11 @@ def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
     import logging
     logging.info('running priceHist2DF function')
     try:
-        import pandas
+        import yfinance as yf
         import datetime
     except:
-        logging.critical('need pandas and datetime modules.')
+        logging.critical('need yfinance and datetime modules.')
         return
-    #if int(pandas.__version__.split('.')[1]) < 17:
-    #    import pandas.io.data as data
-    #else:
-    #    import pandas_datareader as data
-
-    try:
-        import pandas_datareader as data
-        from pandas_datareader import data, wb
-    except:
-        import pandas.io.data as data
 
 
     if type(beginning) is str:
@@ -93,22 +83,17 @@ def priceHist2PandasDF(symbol=None,beginning='1990-01-01',ending=None):
         ending = datetime.datetime.now()
 
     try:
-        result = data.DataReader(symbol,'yahoo',start=beginning,end=ending)
+        tickerData = yf.Ticker(symbol)
+        result = tickerData.history(period='1d', start=beginning, end=ending)
         logging.info('getting data from yahoo.')
-        result = result.drop('Adj Close',axis=1)
+        result = result.drop('Dividends',axis=1)
+        result = result.drop('Stock Splits',axis=1)
         result['Symbol']=symbol
         result['DateCol']=result.index
         #result = result.reset_index(level=['Date'])
     except:
-        try:
-            result = data.DataReader(symbol,'google',start=beginning,end=ending)
-            logging.info('getting data from google.')
-            result['Symbol']=symbol
-            result['DateCol']=result.index
-            #result = result.reset_index(level=['Date'])
-        except:
-            logging.warning('unable to retrieve data. check symbol.')
-            result = None
+        logging.warning('unable to retrieve data. check symbol.')
+        result = None
 
     return result
 
@@ -134,16 +119,16 @@ def elongate(df=None):
 
     opens = df[['DateCol','Symbol','Open']]
     opens.columns = ['DateCol','symbol','price']
-    opens['datetime'] = opens.ix[:,'DateCol'].apply(lambda d: datetime.datetime(d.year,d.month,d.day,9,30))
+    opens['datetime'] = opens.loc[:,'DateCol'].apply(lambda d: datetime.datetime(d.year,d.month,d.day,9,30))
     opens.drop('DateCol', axis=1)
 
     closes = df[['DateCol','Symbol','Close']]
     closes.columns = ['DateCol','symbol','price']
-    closes['datetime'] = closes.ix[:,'DateCol'].apply(lambda d: datetime.datetime(d.year,d.month,d.day,16,0))
+    closes['datetime'] = closes.loc[:,'DateCol'].apply(lambda d: datetime.datetime(d.year,d.month,d.day,16,0))
     closes.drop('DateCol', axis=1)
 
     df = pandas.concat([opens,closes])
-    return df[['datetime','symbol','price']].sort(['symbol','datetime']).reset_index(drop=True)
+    return df[['datetime','symbol','price']].sort_values(['symbol','datetime']).reset_index(drop=True)
 
 def window(df=None,windowCol='price',windowSize=5,dropNulls=False):
     '''
@@ -329,7 +314,7 @@ def ForceIndex(df=None, windowSize=10):
     newColName = 'feat_' + str(windowSize)+'FI'
     priceChange = (tempDF['High'] - tempDF['Open'])/tempDF['Open']
     avgVol = tempDF['Volume'].rolling(window=windowSize,center=False).mean()
-    pandas.ewma(priceChange*(tempDF['Volume']/avgVol),span=windowSize)
+    #pandas.ewm(priceChange*(tempDF['Volume']/avgVol),span=windowSize).mean()
     s=priceChange*(tempDF['Volume']/avgVol)
     tempDF[newColName] = s.ewm(ignore_na=False,span=windowSize,min_periods=windowSize,adjust=True).mean()
     return tempDF
@@ -397,7 +382,7 @@ def RSIgranular(df=None,windowSize=14):
     tempDF = RSI(elongate(tempDF),priceCol='price',windowSize=window)
     tempDF.rename(columns={'feat_RSI'+str(window): 'feat_RSIg'+str(windowSize),'symbol':'Symbol'}, inplace=True)
     tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
-    tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
+    tempDF['DateCol'] = tempDF['datetime'].dt.normalize()
     tempDF.drop(['datetime','price'],inplace=True,axis=1)
     tempDF2 = df.copy()
     return tempDF2.merge(tempDF,on=['Symbol','DateCol'], how='left')
@@ -419,12 +404,12 @@ def DMI(df=None,windowSize=14):
     tempDF['low-close'] = abs(tempDF['Low'] - tempDF['Close'].shift(1))
     tempDF['TR'] = tempDF[['high-low','high-close','low-close']].max(axis=1)
 
-    tempDF['posDI'] = pandas.ewma(tempDF['posDM'] / tempDF['TR'],span=windowSize)
-    tempDF['negDI'] = pandas.ewma(tempDF['negDM'] / tempDF['TR'],span=windowSize)
+    tempDF['posDI'] = (tempDF['posDM'] / tempDF['TR']).ewm(span=windowSize).mean()
+    tempDF['negDI'] = (tempDF['negDM'] / tempDF['TR']).ewm(span=windowSize).mean()
 
 
-    tempDF['feat_DIRatio'+ str(windowSize)] = pandas.ewma(100 * (tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
-    tempDF['feat_ADX'+ str(windowSize)] = pandas.ewma(100 * abs(tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI']),span=windowSize)
+    tempDF['feat_DIRatio'+ str(windowSize)] = (100 * (tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI'])).ewm(span=windowSize).mean()
+    tempDF['feat_ADX'+ str(windowSize)] = (100 * abs(tempDF['posDI'] - tempDF['negDI']) / (tempDF['posDI'] + tempDF['negDI'])).ewm(span=windowSize).mean()
     tempDF['feat_DMI'+ str(windowSize)] = (tempDF['feat_ADX'+ str(windowSize)] * tempDF['feat_DIRatio'+ str(windowSize)]) / 100
     tempDF['feat_AdjATR'+ str(windowSize)] = (tempDF['TR']/tempDF['High']).rolling(window=windowSize,center=False).mean()
 
@@ -436,10 +421,10 @@ def MACD(df=None,colToAvg=None,windowSizes=[9,12,26]):
     import pandas
     tempDF = df.copy()
     newColName = 'feat_' + colToAvg+str(windowSizes[0])+str(windowSizes[1])+str(windowSizes[2])+'MACD'
-    secondEMA = pandas.ewma(df[colToAvg],span=windowSizes[1])
-    thirdEMA = pandas.ewma(df[colToAvg],span=windowSizes[2])
+    secondEMA = df[colToAvg].ewm(span=windowSizes[1]).mean()
+    thirdEMA = df[colToAvg].ewm(span=windowSizes[2]).mean()
     MACD = (secondEMA - thirdEMA)
-    signal = pandas.ewma(MACD,span=windowSizes[0])
+    signal = MACD.ewm(span=windowSizes[0]).mean()
     tempDF[newColName] = (MACD - signal) / (MACD + signal)
     return tempDF
 
@@ -456,7 +441,7 @@ def MACDgranular(df=None,windowSizes=[9,12,26]):
     tempDF.rename(columns={'feat_price' +str(frst)+str(scnd)+str(thrd)+'MACD': 'feat_' +str(windowSizes[0])+str(windowSizes[1])+str(windowSizes[2])+'MACDg','symbol':'Symbol'}, inplace=True)
 
     tempDF = tempDF[tempDF['datetime'].dt.hour == 16]
-    tempDF['DateCol'] = tempDF['datetime'].apply(pandas.datetools.normalize_date)
+    tempDF['DateCol'] = tempDF['datetime'].dt.normalize()
     tempDF.drop(['datetime','price'],inplace=True,axis=1)
     tempDF2 = df.copy()
     return tempDF2.merge(tempDF,on=['Symbol','DateCol'], how='left')
@@ -560,7 +545,7 @@ def AccumulationDistributionLine(df=None,windowSize=10):
     MoneyFlowVolume = MoneyFlowMultiplier * tempDF['Volume']
     tempDF[newColName] = AdjMoneyFlowVolume.rolling(window=windowSize,center=False).sum()
     tempDF['feat_' + str(windowSize)+'CMF'] = MoneyFlowVolume.rolling(window=windowSize,center=False).sum() / tempDF['Volume'].rolling(window=windowSize,center=False).sum()
-    tempDF['feat_' + str(windowSize)+'ChaikinOscillator'] = pandas.ewma(tempDF[newColName],span=max(1,int(windowSize/3))) - pandas.ewma(tempDF[newColName],span=windowSize)
+    tempDF['feat_' + str(windowSize)+'ChaikinOscillator'] = tempDF[newColName].ewm(span=max(1,int(windowSize/3))).mean() - tempDF[newColName].ewm(span=windowSize).mean()
     return tempDF
 
 def Aroon(df=None,windowSize=10):
