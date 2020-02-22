@@ -1,30 +1,26 @@
+# cd into the uyulala folder and execute: conda env create -f condaEnv.yml
 name: uyulala
 channels:
+  - default
   - conda-forge
 dependencies:
   - python=3.7
-  - colorama=0.2.7
-  - future=0.15.2
-  - matplotlib=1.3.1
-  - numpy=1.8.2
-  - os
-  - pandas=0.14.1
-  - pandas_datareader
-  - pip
-  - psutil=2.1.1
-  - random
-  - requests=2.11.1
-  - string
-  - subprocess
-  - sys
-  - tabulate=0.7.5
+  - matplotlib=3.1.1
+  - numpy=1.17.2
+  - pandas=0.25.1
+  - psutil=5.6.3
   - time
-  - traceback
+  - h2o=3.18.0
+  - h2o-py
+  - pip
   - pip:                            # Packages installed from PyPI
-    - http://h2o-release.s3.amazonaws.com/h2o/latest_stable_Py.html h2o
+    - yfinance==0.1.54
 
 # conda config --append channels conda-forge
 # conda create --name uyulala python=3.7 matplotlib numpy pandas pip psutil time h2o h2o-py yfinance
+
+# remove env with: conda remove --name myenv --all
+# create new yml file with: conda env export --file uyulala.yml
 
 #  - subprocess
 #  - sys

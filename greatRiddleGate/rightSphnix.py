@@ -14,7 +14,7 @@ rightSphnix:
 assets = 'Test'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 3       # prediction horizon in days
 
-totalBuildTimeAllowed_seconds = 6000
+totalBuildTimeAllowed_seconds = 1800
 
 
 startDate = '2014-01-01'
@@ -82,27 +82,19 @@ def createLabels(asset=''):
         labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
         labeled = labeled.drop_duplicates(subset=['Date'], keep='last')
         # Supplemental labels
-        #labeled = uyulala.buy(df=labeled,horizon=1,HighOrClose='High',threshold=0.01)
-        labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='High')
-        labeled = uyulala.percentChange(df=labeled,horizon=1,HighOrClose='Close')
-        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.01)
-        labeled = uyulala.percentChange(df=labeled,horizon=2,HighOrClose='High')
-        labeled = uyulala.percentChange(df=labeled,horizon=2,HighOrClose='Close')
-        labeled = uyulala.lowPercentChange(df=labeled,horizon=2)
-        labeled = uyulala.lowPercentChange(df=labeled,horizon=3)
-        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.02)
-        #labeled = uyulala.buy(df=labeled,horizon=2,HighOrClose='High',threshold=0.03)
-        labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.02)
-        labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.03)
-        labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.04)
-        labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.05)
-        labeled = uyulala.absolutePercentChange(df=labeled, horizon=3, HighOrClose='High')
-        labeled = uyulala.absolutePercentChange(df=labeled, horizon=2, HighOrClose='High')
-        # THE BELOW MUST REMAIN IN CORRECT ORDER SINCE CALLED BELOW BY POSITION
+        labeled = uyulala.percentChange(df=labeled,horizon=int(horizon/2),HighOrClose='High')
+        labeled = uyulala.percentChange(df=labeled,horizon=2*horizon,HighOrClose='High')
+        labeled = uyulala.lowPercentChange(df=labeled,horizon=int(horizon/2))
+        labeled = uyulala.lowPercentChange(df=labeled,horizon=2*horizon)
+        labeled = uyulala.absolutePercentChange(df=labeled, horizon=int(horizon/2), HighOrClose='High')
+        labeled = uyulala.absolutePercentChange(df=labeled, horizon=2*horizon, HighOrClose='High')
+        #########################################################################
+        # THE BELOW MUST REMAIN IN CORRECT ORDER SINCE CALLED BELOW BY POSITION #
+        #########################################################################
         # Key Classification Field (is it a good buy?)
-        labeled = uyulala.buy(df=labeled,horizon=3,HighOrClose='High',threshold=0.01)
+        labeled = uyulala.buy(df=labeled,horizon=horizon,HighOrClose='High',threshold=0.01)
         # Key Regression Field (what's the predicted return?)
-        labeled = uyulala.percentChange(df=labeled,horizon=3,HighOrClose='High')
+        labeled = uyulala.percentChange(df=labeled,horizon=horizon,HighOrClose='High')
         # Clean-up
         labeled.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         labeled.to_csv(os.path.join(uyulala.dataDir,'labeled',folderName,asset+'.csv'),index=False)
