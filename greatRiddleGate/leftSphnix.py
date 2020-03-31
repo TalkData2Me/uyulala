@@ -19,14 +19,19 @@ import uyulala
 #reload(uyulala)
 
 from multiprocessing import Pool
-
 import pandas
 import os
 import sys
 import getopt
 import numpy
 import time
-
+import math
+import random
+from psutil import virtual_memory
+import h2o
+from h2o.estimators.pca import H2OPrincipalComponentAnalysisEstimator
+from glob import glob
+import shutil
 
 
 
@@ -35,29 +40,31 @@ import time
 ##################################################################################
 
 assets = 'Test'
-pullPriceHistFor = uyulala.assetList(assets=assets)
 horizon = 3
 start = '2019-01-01'
 end = None
 
+
 try:
-    options, remainder = getopt.getopt(sys.argv[1:], 'ahse', ['assets=',
-                                                             'horizon=',
-                                                             'start=',
-                                                             'end=',
-                                                             ])
-    for opt, arg in options:
-        if opt in ('-a', '--assets'):
-            assets = arg
-            pullPriceHistFor = uyulala.assetList(assets=assets)
-        elif opt in ('-h', '--horizon'):
-            horizon = arg
-        elif opt in ('-s', '--start'):
-            start = arg
-        elif opt in ('-e', '--end'):
-            end = arg
-except:
-    print('Error in parsing input parameters')
+    argumentList=sys.argv[1:]
+    unixOptions = "a:h:s:e:"
+    gnuOptions = ["assets=", "horizon=", "start=", "end="]
+    arguments, values = getopt.getopt(argumentList, unixOptions, gnuOptions)
+except getopt.error as err:
+    # output error, and return with an error code
+    print (str(err))
+    sys.exit(2)
+for currentArgument, currentValue in arguments:
+    if currentArgument in ("-a", "--assets"):
+        assets = currentValue
+    elif currentArgument in ("-h", "--horizon"):
+        horizon = currentValue
+    elif currentArgument in ("-s", "--start"):
+        start = currentValue
+    elif currentArgument in ("-e", "--end"):
+        end = currentValue
+
+pullPriceHistFor = uyulala.assetList(assets=assets)
 
 print('Getting and transforming data')
 print('Assets   :', assets)
@@ -69,12 +76,12 @@ if assets!="Test":
     import warnings
     warnings.filterwarnings("ignore")
 
+folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 
 ##################################################################################
 ###########################       Execute       ##################################
 ##################################################################################
 print('Removing existing data to be replaced')
-folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 
 try:
     [ os.remove(os.path.join(uyulala.dataDir,'raw',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
@@ -86,11 +93,15 @@ try:
 except:
     os.makedirs(os.path.join(uyulala.dataDir,'transformed',folderName))
 
+try:
+    [ os.remove(os.path.join(uyulala.dataDir,'transformed_pca',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed_pca',folderName)) if f.endswith(".csv") ]
+except:
+    os.makedirs(os.path.join(uyulala.dataDir,'transformed_pca',folderName))
 
 
 
-def PullData(asset=''):
-    max_retries = 5
+
+def PullData(asset='',max_retries = 5):
     minRows = 5
     retries = 0
     success = False
@@ -211,6 +222,71 @@ for i in range(0,len(pullPriceHistFor),400):
     pool.join()
 print('Done pulling and transforming data')
 time.sleep(30)
+
+
+#################################################
+###        PCA for Transformed data           ###
+#################################################
+
+
+transformedAssets = [f.split('.')[0] for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName))]
+totMem = virtual_memory().total
+availMem = virtual_memory().available
+
+try:
+    h2o.init(nthreads = -1,max_mem_size="%sG" % int(totMem/1000000000),min_mem_size="%sG" % int(availMem/1000000000))
+except:
+    time.sleep(20)
+    h2o.init(nthreads = -1,max_mem_size="%sG" % int(totMem/1000000000),min_mem_size="%sG" % int(availMem/1000000000))
+
+dataSize = sum(os.path.getsize(os.path.join(uyulala.dataDir,'transformed',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)))
+ratio = (availMem / (6.0000000000000)) / (dataSize)  # H2O recommends to have a cluster 2-4X the size of the data RAM>=dataSize*4 (ratio=1) --> RAM/4 = ratio*dataSize --> (RAM/4)/dataSize = ratio
+
+if ratio < 0.98:
+    k=math.ceil(len(transformedAssets)*ratio)
+else:
+    k=len(transformedAssets)
+
+print('Selecting %s random assets' % k)
+sampledAssets=random.choices(transformedAssets, k=min(k,len(transformedAssets)))
+
+transSample = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),pattern = "(%s)\.csv" % ('|'.join(sampledAssets),),col_types={'DateCol':'enum','Date':'enum'}).na_omit()
+
+colList=[col for col in list(transSample.columns) if col not in ['Date','DateCol','Symbol']]
+
+pca = H2OPrincipalComponentAnalysisEstimator(k = math.ceil(len(colList)*.9), transform = "STANDARDIZE", pca_method="GramSVD")
+pca.train(x=colList, training_frame=transSample)
+numCompsToUse = next(x for x, val in enumerate(pca.varimp()[2][1:]) if val >= 0.98)+1
+print('Will reduce from %s columns to %s components' % (len(colList),numCompsToUse,))
+
+h2o.save_model(model=pca, path=os.path.join(uyulala.modelsDir,folderName), force=True)
+model_id = pca.model_id
+
+i=1
+pred = pca.predict(transSample)
+h2o.export_file(transSample[:, ['Date', 'Symbol', 'DateCol']].cbind(pred[:,list(range(numCompsToUse))]), path=os.path.join(uyulala.dataDir,'transformed_pca',folderName,'Run%s' % i), force = True, parts=-1)
+
+[shutil.move(f, "{}{}run{}-{}.csv".format(os.path.join(uyulala.dataDir,'transformed_pca',folderName),os.path.sep,i,f.split(os.path.sep)[-1])) for f in glob(os.path.join(uyulala.dataDir,'transformed_pca',folderName,'Run%s' % i,'part*'))]
+transformedAssets = [ele for ele in transformedAssets if ele not in list(transSample.columns)]
+h2o.remove_all()
+
+while len(transformedAssets) > 0:
+    i=i+1
+    pca=h2o.load_model(os.path.join(uyulala.modelsDir,folderName,model_id))
+    sampledAssets = random.choices(transformedAssets, k=min(k,len(transformedAssets)))
+    transSample = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),pattern = "(%s)\.csv" % ('|'.join(sampledAssets),),col_types={'DateCol':'enum','Date':'enum'}).na_omit()
+    pred = pca.predict(transSample)
+    h2o.export_file(transSample[:, ['Date', 'Symbol', 'DateCol']].cbind(pred[:,list(range(numCompsToUse))]), path=os.path.join(uyulala.dataDir,'transformed_pca',folderName,'Run%s' % i), force = True, parts=-1)
+    [shutil.move(f, "{}{}run{}-{}.csv".format(os.path.join(uyulala.dataDir,'transformed_pca',folderName),os.path.sep,i,f.split(os.path.sep)[-1])) for f in glob(os.path.join(uyulala.dataDir,'transformed_pca',folderName,'Run%s' % i,'part*'))]
+    transformedAssets = [ele for ele in transformedAssets if ele not in list(transSample.columns)]
+    h2o.remove_all()
+
+[shutil.rmtree(sub_folder) for sub_folder in glob(os.path.join(uyulala.dataDir,'transformed_pca',folderName,'Run*'))]
+print('done with pca')
+
+with open(os.path.join(uyulala.modelsDir,folderName,"pca_model_id.txt"), "w") as output:
+    output.write(str(model_id))
+
 
 
 

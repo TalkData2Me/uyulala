@@ -53,10 +53,10 @@ print('Loading transformed data')
 
 import h2o
 try:
-    h2o.init(max_mem_size="16G",min_mem_size="6G")
+    h2o.init(nthreads = -1,max_mem_size="16G",min_mem_size="6G")
 except:
     time.sleep(20)
-    h2o.init(max_mem_size="16G",min_mem_size="6G")
+    h2o.init(nthreads = -1,max_mem_size="16G",min_mem_size="6G")
 
 transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),col_types={'DateCol':'enum'})
 
