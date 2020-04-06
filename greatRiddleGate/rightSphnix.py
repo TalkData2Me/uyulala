@@ -14,7 +14,7 @@ rightSphnix:
 assets = 'AllStocks'   # Typically AllStocks, SchwabOneSource, or Test
 horizon = 2       # prediction horizon in days
 
-totalBuildTimeAllowed_seconds = 86400
+totalBuildTimeAllowed_seconds = 260000
 
 
 startDate = '2015-01-01'
@@ -56,10 +56,9 @@ except:
     os.makedirs(os.path.join(uyulala.dataDir,'labeled',folderName))
 
 try:
-    [ os.remove(os.path.join(uyulala.modelsDir,folderName,f)) for f in os.listdir(os.path.join(uyulala.modelsDir,folderName)) ]
+    [ os.remove(os.path.join(uyulala.modelsDir,folderName,f)) for f in os.listdir(os.path.join(uyulala.modelsDir,folderName)) if f!='pca_model_id.txt'  ]
 except:
     os.makedirs(os.path.join(uyulala.modelsDir,folderName))
-
 
 ##################################################################################
 ################# Get and transform data (run leftSphnix) ########################
@@ -73,7 +72,6 @@ if assets!="Test":
 filePath = os.path.join(uyulala.uyulalaDir,'greatRiddleGate','leftSphnix.py')
 print('making call: '+'''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate))
 subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,assets,horizon,startDate), shell=True)
-
 
 
 ##################################################################################
@@ -91,14 +89,14 @@ def createLabels(asset=''):
     try:
         labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
         labeled = labeled.drop_duplicates(subset=['Date'], keep='last')
-        # Supplemental labels
-        labeled = uyulala.percentChange(df=labeled,horizon=int(horizon/2),HighOrClose='High')
-        labeled = uyulala.percentChange(df=labeled,horizon=2*horizon,HighOrClose='High')
-        #labeled = uyulala.lowPercentChange(df=labeled,horizon=int(horizon/2))
-        #labeled = uyulala.lowPercentChange(df=labeled,horizon=horizon)
-        #labeled = uyulala.absolutePercentChange(df=labeled, horizon=2*horizon, HighOrClose='High')
-        labeled = uyulala.absolutePercentChange(df=labeled, horizon=horizon, HighOrClose='High')
-        labeled = uyulala.buy(df=labeled,horizon=horizon,HighOrClose='High',threshold=0.00001)
+        ### Supplemental labels
+        #labeled = uyulala.percentChange(df=labeled,horizon=int(horizon/2),HighOrClose='High')
+        #labeled = uyulala.percentChange(df=labeled,horizon=2*horizon,HighOrClose='High')
+        ##labeled = uyulala.lowPercentChange(df=labeled,horizon=int(horizon/2))
+        ##labeled = uyulala.lowPercentChange(df=labeled,horizon=horizon)
+        ##labeled = uyulala.absolutePercentChange(df=labeled, horizon=2*horizon, HighOrClose='High')
+        #labeled = uyulala.absolutePercentChange(df=labeled, horizon=horizon, HighOrClose='High')
+        #labeled = uyulala.buy(df=labeled,horizon=horizon,HighOrClose='High',threshold=0.00001)
         #########################################################################
         # THE BELOW MUST REMAIN IN CORRECT ORDER SINCE CALLED BELOW BY POSITION #
         #########################################################################
@@ -147,73 +145,32 @@ print('importing data')
 dataSize = sum(f.stat().st_size for f in Path(os.path.join(uyulala.dataDir,'transformed_pca',folderName)).glob('**/*') if f.is_file() ) + sum(os.path.getsize(os.path.join(uyulala.dataDir,'labeled',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'labeled',folderName)))
 ratio = (availMem / (6.0000000000000)) / (dataSize)
 
-
-transformed_pca_files = [file for file in os.listdir(os.path.join(uyulala.dataDir,'transformed_pca',folderName)) if file not in ['.DS_Store']]
+transformed_pca_files = [file for file in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)) if file not in ['.DS_Store']]
+#transformed_pca_files = [file for file in os.listdir(os.path.join(uyulala.dataDir,'transformed_pca',folderName)) if file not in ['.DS_Store']]
 
 if ratio < 0.98:
     k=math.ceil(len(transformed_pca_files)*ratio)
 else:
     k=len(transformed_pca_files)
+
 sampledFiles=random.choices(transformed_pca_files, k=min(k,len(transformed_pca_files)))
 
-#transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed_pca',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit()
-#labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()
-fullDF = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed_pca',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit().merge(h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()).na_omit()
-
-#print('Final data size is %s' % (fullDF.shape,))
-df,blending = fullDF.split_frame(ratios=[.75])
-#print('Training data size: %s' % (df.shape,))
-#print('Blending data size: %s' % (blending.shape,))
-
-features = [s for s in fullDF.columns if "PC" in s]
-labels = [s for s in fullDF.columns if "lab_" in s]
-
-'''
-dataSize = sum(os.path.getsize(os.path.join(uyulala.dataDir,'transformed',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName))) + sum(os.path.getsize(os.path.join(uyulala.dataDir,'labeled',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'labeled',folderName)))
-
-
-ratio = (availMem / (6.0000000000000)) / (dataSize)  # H2O recommends to have a cluster 2-4X the size of the data RAM>=dataSize*4 (ratio=1) --> RAM/4 = ratio*dataSize --> (RAM/4)/dataSize = ratio Already taking 25% off for blending frame (only leaving 75% of original data size)
-if ratio < 0.98:                  #same ratio used in for loop
-    print('Reducing data size by %s percent due to RAM per data size' % ((1-ratio)*100,))
-
-
-try:
-    shutil.rmtree(os.path.join(uyulala.dataDir,'tmp',folderName))
-except:
-    pass
-for l in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
-    try:
-        try:
-            fullDF=h2o.import_file(path=os.path.join(uyulala.dataDir,'tmp',folderName),col_types={'DateCol':'enum','Date':'enum'})
-            shutil.rmtree(os.path.join(uyulala.dataDir,'tmp',folderName))
-        except:
-            pass
-        transformed = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),pattern = "%s.*\.csv" % l,col_types={'DateCol':'enum','Date':'enum'}).na_omit()
-        labeled = h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = "%s.*\.csv" % l,col_types={'DateCol':'enum','Date':'enum'}).na_omit()
-        if ratio < 0.98: #same ratio used above for loop
-            labeled,drop = labeled.split_frame(ratios=[ratio])
-        try:
-            fullDF = fullDF.rbind(labeled.merge(transformed))
-        except:
-            print('fullDF non-exstant; creating from merge')
-            fullDF = labeled.merge(transformed)
-        h2o.export_file(fullDF, path=os.path.join(uyulala.dataDir,'tmp',folderName), force = True, parts=-1)
-        print('Current data size is %s' % (fullDF.shape,))
-        print('Remaining available RAM: %s GB' % (virtual_memory().available/1000000000,))
-    except:
-        pass
-    h2o.remove_all()
-fullDF=h2o.import_file(path=os.path.join(uyulala.dataDir,'tmp',folderName),col_types={'DateCol':'enum','Date':'enum'})
-
+fullDF = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit().merge(h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()).na_omit()
+#fullDF = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed_pca',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit().merge(h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()).na_omit()
 
 print('Final data size is %s' % (fullDF.shape,))
-df,blending = fullDF.split_frame(ratios=[.75])
+df,blending = fullDF.split_frame(ratios=[.85])
 print('Training data size: %s' % (df.shape,))
 print('Blending data size: %s' % (blending.shape,))
+print(df.head(2))
+print(blending.head(2))
+features = [s for s in fullDF.columns if "feat_" in s]
+#features = [s for s in fullDF.columns if "PC" in s]
+labels = [s for s in fullDF.columns if "lab_" in s]
 
-features = [s for s in transformed.columns if "feat_" in s]
-labels = [s for s in labeled.columns if "lab_" in s]
-'''
+
+
+
 
 print('building models')
 timePerRun = int(totalBuildTimeAllowed_seconds / (len(labels)+2*len(labels)+2*5))
@@ -224,16 +181,23 @@ L0Results = fullDF[['Symbol','DateCol']]
 executionOrder = []
 for label in labels:
     print('first run of '+label)
-    # project_name=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(99))
     aml = H2OAutoML(project_name=label+'0',
-                    stopping_tolerance=0.0001,
+    #                stopping_tolerance=0.1,
                     max_runtime_secs = timePerRun)
-    aml.train(x=features,y=label,training_frame=df)
+    if df.types[label] in ('enum','str','bool'):
+        aml.train(x=features,y=label,training_frame=df,sort_metric = "logloss",stopping_metric="logloss")
+    else:
+        aml.train(x=features,y=label,training_frame=df,sort_metric = "RMSLE",stopping_metric="RMSLE")
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
+    print('variable importance:')
+    print(aml.leader.varimp(return_list=True))
+
     preds = aml.leader.predict(fullDF)
+    print('preds shape is {}'.format(preds.shape))
+    preds.head()
     if preds.shape[1]>1:
         preds = preds['True']
     preds = preds.set_names([aml._leader_id + '_' + s for s in preds.columns])
@@ -248,16 +212,23 @@ L1Results = fullDF[['Symbol','DateCol']]
 for label in labels:
     print('second run of '+label)
     aml = H2OAutoML(project_name=label+'1',
-                    stopping_tolerance=0.0001,
+    #                stopping_tolerance=0.01,
                     max_runtime_secs = 2*timePerRun)
-    aml.train(x=features+[x for x in L0Results.columns if (x != 'Symbol') & (x != 'DateCol')],
-              y=label,
-              training_frame=df.merge(L0Results))
+    if df.types[label] in ('enum','str','bool'):
+        aml.train(x=features,y=label,training_frame=df,sort_metric = "mean_per_class_error",stopping_metric="mean_per_class_error")
+    else:
+        aml.train(x=features,y=label,training_frame=df,sort_metric = "MSE",stopping_metric="MSE")
+    print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
+    print('variable importance:')
+    print(aml.leader.varimp(return_list=True))
+
     preds = aml.leader.predict(fullDF.merge(L0Results))
+    print('preds shape is {}'.format(preds.shape))
+    preds.head()
     if preds.shape[1]>1:
         preds = preds['True']
     preds = preds.set_names([aml._leader_id + '_' + s for s in preds.columns])
@@ -272,18 +243,24 @@ BuyResults = fullDF[['Symbol','DateCol']]
 for label in [labels[-2]]:
     print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
-                    stopping_tolerance=0.0001,
+    #                stopping_tolerance=0.001,
                     max_runtime_secs = 5*timePerRun)
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results),
               leaderboard_frame=blending.merge(L1Results),
-              blending_frame=blending.merge(L1Results))
+              blending_frame=blending.merge(L1Results),sort_metric = "AUCPR",stopping_metric="AUCPR")
+    print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
+    print('variable importance:')
+    print(aml.leader.varimp(return_list=True))
+
     preds = aml.leader.predict(fullDF.merge(L1Results))
+    print('preds shape is {}'.format(preds.shape))
+    preds.head()
     preds = preds.drop(['predict','False']).set_names([aml._leader_id + '_True'])
     BuyResults = BuyResults.cbind(preds)
     BuyResults = BuyResults[BuyResults[aml._leader_id + '_True']>0.7]
@@ -296,22 +273,28 @@ for label in [labels[-2]]:
 fullDF = BuyResults.merge(fullDF)
 
 
-PredictedPerformance = fulLDF[['Symbol','DateCol']]
+PredictedPerformance = fullDF[['Symbol','DateCol']]
 for label in [labels[-1]]:
     print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
-                    stopping_tolerance=0.0001,
+    #                stopping_tolerance=0.001,
                     max_runtime_secs = 5*timePerRun)
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results),
               leaderboard_frame=blending.merge(L1Results),
-              blending_frame=blending.merge(L1Results))
+              blending_frame=blending.merge(L1Results),sort_metric = "MAE",stopping_metric="MAE")
+    print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
-    preds = aml.leader.predict(fulLDF.merge(L1Results))
+    print('variable importance:')
+    print(aml.leader.varimp(return_list=True))
+
+    preds = aml.leader.predict(fullDF.merge(L1Results))
+    print('preds shape is {}'.format(preds.shape))
+    preds.head()
     PredictedPerformance = PredictedPerformance.cbind(preds)
 
     h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
@@ -331,7 +314,7 @@ with open(os.path.join(uyulala.modelsDir,folderName,"executionOrder.txt"), "w") 
 
 raw = h2o.import_file(path=os.path.join(uyulala.dataDir,'raw',folderName),pattern = ".*\.csv")
 labelCol = labels[-1]
-pandasDF = fulLDF.merge(raw)[[labelCol,'predict','Open','Date']].as_data_frame()
+pandasDF = fullDF.merge(raw)[[labelCol,'predict','Open','Date']].as_data_frame()
 pandasDF['returnIfWrong'] = (pandasDF.Open.shift(-4) - pandasDF.Open.shift(-1)) / pandasDF.Open.shift(-1)
 maxEV = 0
 thresholdToUse = 0

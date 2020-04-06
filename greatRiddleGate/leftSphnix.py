@@ -223,7 +223,7 @@ for i in range(0,len(pullPriceHistFor),400):
 print('Done pulling and transforming data')
 time.sleep(30)
 
-
+'''
 #################################################
 ###        PCA for Transformed data           ###
 #################################################
@@ -286,77 +286,4 @@ print('done with pca')
 
 with open(os.path.join(uyulala.modelsDir,folderName,"pca_model_id.txt"), "w") as output:
     output.write(str(model_id))
-
-
-
-
-
-
-'''
-def PullData_wrapped(asset):
-    try:
-        PullData(asset)
-    except:
-        import traceback
-        print('%s: %s' % (asset, traceback.format_exc()))
-
-
-print 'Downloading data for %s' % (pullPriceHistFor)
-for i in range(0,len(pullPriceHistFor),500):
-    l = pullPriceHistFor[i:i+500]
-    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
-    pool.map(PullData_wrapped, l)
-    pool.close()
-    pool.join()
-
-print 'Done pulling data'
-'''
-
-
-
-'''
-pool = Pool(uyulala.availableCores,maxtasksperchild=1)
-
-print 'Downloading data for %s' % (pullPriceHistFor)
-pool.map(PullData_wrapped, pullPriceHistFor)
-print 'Done pulling data'
-#for asset in pullPriceHistFor:
-#    PullData(asset = asset)
-pool.close()  #close the pool and wait for the work to finish
-pool.join()
-'''
-
-
-
-'''
-downloadedAssets = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
-
-print 'Transforming data'
-for i in range(0,len(downloadedAssets),500):
-    l = downloadedAssets[i:i+500]
-    pool = Pool(uyulala.availableCores,maxtasksperchild=1)
-    pool.map(AddFeatures, l)
-    pool.close()
-    pool.join()
-
-print 'Data Download and Transform complete'
-'''
-
-
-
-
-
-'''
-pool = Pool(uyulala.availableCores,maxtasksperchild=1)
-
-print 'Transforming data'
-pool.map(AddFeatures, downloadedAssets)
-
-#for asset in downloadedAssets:
-#    AddFeatures(asset = asset)
-
-pool.close()  #close the pool and wait for the work to finish
-pool.join()
-
-print 'Data Download and Transform complete'
 '''
