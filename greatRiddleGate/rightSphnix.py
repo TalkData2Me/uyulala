@@ -79,7 +79,7 @@ subprocess.call('''python %s --assets=%s --horizon=%i --start=%s''' % (filePath,
 ##################################################################################
 
 
-evaluate = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+evaluate = [ f.replace('.csv','') for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)) if f.endswith(".csv") ]
 
 
 
@@ -143,17 +143,18 @@ except:
 print('importing data')
 
 dataSize = sum(f.stat().st_size for f in Path(os.path.join(uyulala.dataDir,'transformed_pca',folderName)).glob('**/*') if f.is_file() ) + sum(os.path.getsize(os.path.join(uyulala.dataDir,'labeled',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'labeled',folderName)))
-ratio = (availMem / (6.0000000000000)) / (dataSize)
+ratio = (availMem / (10.0000000000000)) / (dataSize)
 
 transformed_pca_files = [file for file in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)) if file not in ['.DS_Store']]
 #transformed_pca_files = [file for file in os.listdir(os.path.join(uyulala.dataDir,'transformed_pca',folderName)) if file not in ['.DS_Store']]
 
 if ratio < 0.98:
+    print('reducing file size by {}%'.format(1-ratio))
     k=math.ceil(len(transformed_pca_files)*ratio)
+    sampledFiles=random.choices(transformed_pca_files, k=min(k,len(transformed_pca_files)))
 else:
-    k=len(transformed_pca_files)
+    sampledFiles=transformed_pca_files
 
-sampledFiles=random.choices(transformed_pca_files, k=min(k,len(transformed_pca_files)))
 
 fullDF = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit().merge(h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()).na_omit()
 #fullDF = h2o.import_file(path=os.path.join(uyulala.dataDir,'transformed_pca',folderName),pattern = "(%s)" % ('|'.join(sampledFiles),),col_types={'DateCol':'enum','Date':'enum'}).na_omit().merge(h2o.import_file(path=os.path.join(uyulala.dataDir,'labeled',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'}).na_omit()).na_omit()
@@ -181,19 +182,22 @@ L0Results = fullDF[['Symbol','DateCol']]
 executionOrder = []
 for label in labels:
     print('first run of '+label)
-    aml = H2OAutoML(project_name=label+'0',
-    #                stopping_tolerance=0.1,
-                    max_runtime_secs = timePerRun)
     if df.types[label] in ('enum','str','bool'):
-        aml.train(x=features,y=label,training_frame=df,sort_metric = "logloss",stopping_metric="logloss")
+        aml = H2OAutoML(project_name=label+'0',
+        #                stopping_tolerance=0.1,
+                        max_runtime_secs = timePerRun,sort_metric = "logloss",stopping_metric="logloss")
+
     else:
-        aml.train(x=features,y=label,training_frame=df,sort_metric = "RMSLE",stopping_metric="RMSLE")
+        aml = H2OAutoML(project_name=label+'0',
+        #                stopping_tolerance=0.1,
+                        max_runtime_secs = timePerRun,sort_metric = "RMSLE",stopping_metric="RMSLE")
+    aml.train(x=features,y=label,training_frame=df)
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     print('variable importance:')
-    print(aml.leader.varimp(return_list=True))
+    print(aml.leader.varimp(use_pandas=True))
 
     preds = aml.leader.predict(fullDF)
     print('preds shape is {}'.format(preds.shape))
@@ -215,16 +219,22 @@ for label in labels:
     #                stopping_tolerance=0.01,
                     max_runtime_secs = 2*timePerRun)
     if df.types[label] in ('enum','str','bool'):
-        aml.train(x=features,y=label,training_frame=df,sort_metric = "mean_per_class_error",stopping_metric="mean_per_class_error")
+        aml = H2OAutoML(project_name=label+'0',
+        #                stopping_tolerance=0.1,
+                        max_runtime_secs = timePerRun,sort_metric = "mean_per_class_error",stopping_metric="mean_per_class_error")
+
     else:
-        aml.train(x=features,y=label,training_frame=df,sort_metric = "MSE",stopping_metric="MSE")
+        aml = H2OAutoML(project_name=label+'0',
+        #                stopping_tolerance=0.1,
+                        max_runtime_secs = timePerRun,sort_metric = "MSE",stopping_metric="MSE")
+    aml.train(x=features,y=label,training_frame=df)
     print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     print('variable importance:')
-    print(aml.leader.varimp(return_list=True))
+    print(aml.leader.varimp(use_pandas=True))
 
     preds = aml.leader.predict(fullDF.merge(L0Results))
     print('preds shape is {}'.format(preds.shape))
@@ -244,33 +254,33 @@ for label in [labels[-2]]:
     print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
     #                stopping_tolerance=0.001,
-                    max_runtime_secs = 5*timePerRun)
+                    max_runtime_secs = 5*timePerRun,sort_metric = "AUCPR",stopping_metric="AUCPR")
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results),
               leaderboard_frame=blending.merge(L1Results),
-              blending_frame=blending.merge(L1Results),sort_metric = "AUCPR",stopping_metric="AUCPR")
+              blending_frame=blending.merge(L1Results))
     print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     print('variable importance:')
-    print(aml.leader.varimp(return_list=True))
+    print(aml.leader.varimp(use_pandas=True))
 
     preds = aml.leader.predict(fullDF.merge(L1Results))
     print('preds shape is {}'.format(preds.shape))
     preds.head()
     preds = preds.drop(['predict','False']).set_names([aml._leader_id + '_True'])
     BuyResults = BuyResults.cbind(preds)
-    BuyResults = BuyResults[BuyResults[aml._leader_id + '_True']>0.7]
+    #BuyResults = BuyResults[BuyResults[aml._leader_id + '_True']>0.7]
 
     h2o.save_model(model=aml.leader, path=os.path.join(uyulala.modelsDir,folderName), force=True)
     aml = None
     del aml
 
 
-fullDF = BuyResults.merge(fullDF)
+fullDF = fullDF.merge(BuyResults)
 
 
 PredictedPerformance = fullDF[['Symbol','DateCol']]
@@ -278,19 +288,19 @@ for label in [labels[-1]]:
     print('final run of '+label)
     aml = H2OAutoML(project_name=label+'_final',
     #                stopping_tolerance=0.001,
-                    max_runtime_secs = 5*timePerRun)
+                    max_runtime_secs = 5*timePerRun,sort_metric = "MAE",stopping_metric="MAE")
     aml.train(x=features+[x for x in L1Results.columns if (x != 'Symbol') & (x != 'DateCol')],
               y=label,
               training_frame=df.merge(L1Results),
               leaderboard_frame=blending.merge(L1Results),
-              blending_frame=blending.merge(L1Results),sort_metric = "MAE",stopping_metric="MAE")
+              blending_frame=blending.merge(L1Results))
     print(aml.leaderboard.as_data_frame())
     print(aml.leaderboard.as_data_frame()['model_id'].tolist()[0:1][0])
     print(aml.leaderboard[0,:])
     executionOrder = executionOrder + [aml._leader_id]
 
     print('variable importance:')
-    print(aml.leader.varimp(return_list=True))
+    print(aml.leader.varimp(use_pandas=True))
 
     preds = aml.leader.predict(fullDF.merge(L1Results))
     print('preds shape is {}'.format(preds.shape))
@@ -301,10 +311,11 @@ for label in [labels[-1]]:
     aml = None
     del aml
 
-fullDF = PredictedPerformance.merge(fullDF)
-
 with open(os.path.join(uyulala.modelsDir,folderName,"executionOrder.txt"), "w") as output:
     output.write(str(executionOrder))
+fullDF = fullDF.merge(PredictedPerformance)
+print(fullDF.head(2))
+h2o.export_file(fullDF, path=os.path.join(uyulala.dataDir,'model_data',folderName), force = True, parts=-1)
 
 ##################################################################################
 #########################      Backtesting      ##################################
@@ -312,7 +323,7 @@ with open(os.path.join(uyulala.modelsDir,folderName,"executionOrder.txt"), "w") 
 
 #import matplotlib.pyplot as plt
 
-raw = h2o.import_file(path=os.path.join(uyulala.dataDir,'raw',folderName),pattern = ".*\.csv")
+raw = h2o.import_file(path=os.path.join(uyulala.dataDir,'raw',folderName),pattern = ".*\.csv",col_types={'DateCol':'enum','Date':'enum'})
 labelCol = labels[-1]
 pandasDF = fullDF.merge(raw)[[labelCol,'predict','Open','Date']].as_data_frame()
 pandasDF['returnIfWrong'] = (pandasDF.Open.shift(-4) - pandasDF.Open.shift(-1)) / pandasDF.Open.shift(-1)
