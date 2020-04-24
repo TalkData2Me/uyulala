@@ -50,6 +50,8 @@ def assetList(assets='Test'):
         amex = pandas.read_csv('https://old.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=amex&render=download').Symbol.tolist()
         nyse = pandas.read_csv('https://old.nasdaq.com/screening/companies-by-name.aspx?letter=0&exchange=nyse&render=download').Symbol.tolist()
         return list(set([item.split('.')[0].split('^')[0].strip() for item in nasdaq+amex+nyse]))
+    elif assets == 'SchwabETFs':
+        return ['SCHK','SCHB','SCHX','SCHD','SCHM','SCHA','SCHG','SCHV','SCHH','FNDB','FNDX','FNDA','SCHF','SCHC','SCHE','FNDF','FNDC','FNDE','SCHI','SCHJ','SCHZ','SCHO','SCHR','SCHQ','SCHP']
     else:
         return ['CHIX', 'QQQC', 'SDEM','ABCDEFG']
 
@@ -368,11 +370,11 @@ def RSI(df=None,priceCol='Close',windowSize=14):
     import pandas
     tempDF = df.copy()
     tempDF['rsiChange']=tempDF[priceCol] - tempDF[priceCol].shift(1)
-    tempDF['rsiGain']=tempDF['rsiChange'].apply(lambda x: x if x>0 else 0)
-    tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: x if x<0 else 0).abs()
+    tempDF['rsiGain']=tempDF['rsiChange'].apply(lambda x: 1.00000000*x if x>0 else 0)
+    tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: 1.00000000*x if x<0 else 0).abs()
     tempDF['rsiAvgGain']=tempDF['rsiGain'].rolling(window=windowSize,center=False).sum() / windowSize
     tempDF['rsiAvgLoss']=tempDF['rsiLoss'].rolling(window=windowSize,center=False).sum() / windowSize
-    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100 if (x.rsiAvgLoss<0.00000000001 or x.rsiAvgLoss>-0.00000000001) else 0 if (x.rsiAvgGain<0.00000000001 or x.rsiAvgGain>-0.00000000001) else 100-(100/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
+    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100.00000000 if (x.rsiAvgLoss<0.00000000001 or x.rsiAvgLoss>-0.00000000001) else 0.00000000 if (x.rsiAvgGain<0.00000000001 or x.rsiAvgGain>-0.00000000001) else 100.00000000-(100.00000000/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
     tempDF.drop(['rsiChange','rsiGain','rsiLoss','rsiAvgGain','rsiAvgLoss'],inplace=True,axis=1)
     return tempDF
 
@@ -557,11 +559,11 @@ def Aroon(df=None,windowSize=10):
     import numpy
     tempDF = df.copy()
     rmlagmax = lambda xs: numpy.argmax(xs[::-1])
-    DaysSinceHigh = tempDF['High'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmax)
+    DaysSinceHigh = 1.00000000000*tempDF['High'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmax)
     rmlagmin = lambda xs: numpy.argmin(xs[::-1])
-    DaysSinceLow = tempDF['Low'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmin)
-    tempDF['feat_' + str(windowSize)+'AroonUp'] = ((windowSize - DaysSinceHigh)/windowSize) * 100
-    tempDF['feat_' + str(windowSize)+'AroonDown'] = ((windowSize - DaysSinceLow)/windowSize) * 100
+    DaysSinceLow = 1.00000000000*tempDF['Low'].rolling(center=False,min_periods=windowSize,window=windowSize).apply(func=rmlagmin)
+    tempDF['feat_' + str(windowSize)+'AroonUp'] = ((windowSize - DaysSinceHigh*1.000000000)/windowSize) * 100.00000000000
+    tempDF['feat_' + str(windowSize)+'AroonDown'] = ((windowSize - DaysSinceLow*1.000000000)/windowSize) * 100.00000000000
     tempDF['feat_' + str(windowSize)+'AroonOscillator'] = tempDF['feat_' + str(windowSize)+'AroonUp'] - tempDF['feat_' + str(windowSize)+'AroonDown']
     return tempDF
 
