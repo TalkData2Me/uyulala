@@ -7,8 +7,8 @@ Read transformed data from leftSphnix and apply models built in rightSphnix
 #########################       Configure       ##################################
 ##################################################################################
 
-assets = 'SchwabOneSource'   # Typically AllStocks, SchwabOneSource, or Test
-horizon = 3       # prediction horizon in days
+assets = 'SchwabETFs'   # Typically AllStocks, SchwabOneSource, or Test
+horizon = 2       # prediction horizon in days
 
 
 startDate = '2017-06-01'
@@ -24,8 +24,8 @@ import pandas
 import uyulala
 import ast
 import numpy as np
-import pandas_datareader.data as web
-import matplotlib.pyplot as plt
+#import pandas_datareader.data as web
+#import matplotlib.pyplot as plt
 import sys
 import subprocess
 import time
@@ -96,8 +96,9 @@ forConsideration = forConsideration[forConsideration['WeightedExpectedReturn']>0
 forConsideration = forConsideration[['Symbol','WeightedExpectedReturn']]
 forConsideration = forConsideration.set_names(['Symbol','predict'])
 '''
-
-forConsideration = transformed[transformed[finalPredictionColumn]>=threshold]
+forConsideration = transformed[['Symbol',finalPredictionColumn,BuySignalColumn]]
+print(forConsideration.sort(1, ascending=False).head(100))
+forConsideration = forConsideration[(forConsideration[finalPredictionColumn]>=threshold) & (forConsideration[BuySignalColumn]>0.5)]
 forConsideration = forConsideration[['Symbol',finalPredictionColumn]]
 forConsideration = forConsideration.set_names(['Symbol','predict'])
 
@@ -116,19 +117,25 @@ else:
 
 
 
-#download daily price data for each of the stocks in the portfolio
-data = web.DataReader(stocks,data_source='yahoo',start='01/01/2005')['Adj Close'].sort_index(ascending=True)
 
-#convert daily stock prices into daily returns
-returns = data.pct_change()
+historicReturns=pandas.DataFrame()
+for asset in stocks:
+    labeled = pandas.read_csv(os.path.join(uyulala.dataDir,'raw',folderName,asset+'.csv'),parse_dates=['DateCol']).set_index('DateCol',drop=False)
+    labeled = labeled.drop_duplicates(subset=['Date'], keep='last')
+    labeled = uyulala.percentChange(df=labeled,horizon=horizon,HighOrClose='High')
+    if historicReturns.empty:
+        historicReturns = labeled[[labeled.columns[-1]]].rename(columns={labeled.columns[-1]: asset})
+    else:
+        historicReturns = historicReturns.merge(labeled[[labeled.columns[-1]]].rename(columns={labeled.columns[-1]: asset}),left_index=True, right_index=True)
+
 
 #calculate mean daily return and covariance of daily returns
 mean_daily_returns = forConsideration.as_data_frame().set_index(['Symbol']).iloc[:,0]
 mean_daily_returns = mean_daily_returns.fillna(-0.02)
-cov_matrix = returns.cov()
+cov_matrix = historicReturns.cov()
 
 #set number of runs of random portfolio weights
-num_portfolios = 10000*len(stocks)
+num_portfolios = 100000*len(stocks)
 
 #set up array to hold results
 #We have increased the size of the array to hold the weight values for each stock
@@ -138,41 +145,45 @@ results = np.zeros((3+len(stocks),num_portfolios))
 print('Creating sample portfolios')
 
 for i in range(num_portfolios):
-    #select random weights for portfolio holdings
+    ###select random weights for portfolio holdings
     weightsSize = len(stocks)
     weights = np.array(np.random.random(weightsSize))
-    mask = np.random.randint(0,int((weightsSize+1)/5),size=weightsSize).astype(np.bool)
+    #mask = np.random.randint(0,int((weightsSize+1)/5),size=weightsSize).astype(np.bool)
+    mask = np.random.randint(0,2,size=weightsSize).astype(np.bool)
     r = np.zeros(weightsSize)
     weights[mask] = r[mask]
-    #rebalance weights to sum to 1
+    ###rebalance weights to sum to 1
     weights /= np.sum(weights)
-    #calculate portfolio return and volatility
-    portfolio_return = np.sum(mean_daily_returns * weights) * 252
+    ###calculate portfolio return and volatility
+    portfolio_return = (np.sum(mean_daily_returns * weights)/horizon) * 252
     portfolio_std_dev = np.sqrt(np.dot(weights.T,np.dot(cov_matrix, weights))) * np.sqrt(252)
-    #store results in results array
+    ###store results in results array
     results[0,i] = portfolio_return
     results[1,i] = portfolio_std_dev
-    #store Sharpe Ratio (return / volatility) - risk free rate element excluded for simplicity
+    ###store Sharpe Ratio (return / volatility) - risk free rate element excluded for simplicity
     results[2,i] = results[0,i] / results[1,i]
-    #iterate through the weight vector and add data to results array
+    ###iterate through the weight vector and add data to results array
     for j in range(len(weights)):
         results[j+3,i] = weights[j]
+    #for x in np.nditer(np.sort(weights)[::-1],order='C'):
 
 #convert results array to Pandas DataFrame
 results_frame = pandas.DataFrame(results.T,columns=['ret','stdev','sharpe']+stocks)
 
 print('Determining optimal portfolios')
 
-#locate position of portfolio with highest Sharpe Ratio
-max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
-print ('Max Sharpe Ratio Portfolio:')
-print(max_sharpe_port)
-
 #locate positon of portfolio with minimum standard deviation
 min_vol_port = results_frame.iloc[results_frame['stdev'].idxmin()]
 print ('Min Volatility Portfolio:')
 print(min_vol_port)
 
+#locate position of portfolio with highest Sharpe Ratio
+max_sharpe_port = results_frame.iloc[results_frame['sharpe'].idxmax()]
+print ('Max Sharpe Ratio Portfolio:')
+print(max_sharpe_port)
+
+
+'''
 print('Plot efficient frontier')
 
 #create scatter plot coloured by Sharpe Ratio
@@ -189,3 +200,4 @@ plt.scatter(min_vol_port[1],min_vol_port[0],marker=(5,1,0),color='g',s=500)
 h2o.cluster().shutdown()
 
 plt.show()
+'''
