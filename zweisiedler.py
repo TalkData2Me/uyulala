@@ -200,6 +200,20 @@ def highPoint(df=None,horizon=7):
     return tempDF
 '''
 
+'''
+def bracket(df=None, horizon=7):
+    import logging
+    logging.info('running percentChange')
+    try:
+        import pandas
+    except:
+        logging.critical('need pandas module.')
+        return
+    tempDF = df.copy()
+    tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
+    for h in range(1,horizon+1):
+'''        
+
 def percentChange(df=None, horizon=7, HighOrClose='High'):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column 'percentChange'
