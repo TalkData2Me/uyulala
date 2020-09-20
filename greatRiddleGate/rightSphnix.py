@@ -94,9 +94,9 @@ def createLabels(asset=''):
         #labeled = uyulala.percentChange(df=labeled,horizon=int(horizon/2),HighOrClose='High')
         #labeled = uyulala.percentChange(df=labeled,horizon=2*horizon,HighOrClose='High')
         ##labeled = uyulala.lowPercentChange(df=labeled,horizon=int(horizon/2))
-        ##labeled = uyulala.lowPercentChange(df=labeled,horizon=horizon)
+        labeled = uyulala.lowPercentChange(df=labeled,horizon=horizon)
         ##labeled = uyulala.absolutePercentChange(df=labeled, horizon=2*horizon, HighOrClose='High')
-        labeled = uyulala.absolutePercentChange(df=labeled, horizon=horizon, HighOrClose='High')
+        ##labeled = uyulala.absolutePercentChange(df=labeled, horizon=horizon, HighOrClose='High')
         #labeled = uyulala.buy(df=labeled,horizon=horizon,HighOrClose='High',threshold=0.00001)
         #########################################################################
         # THE BELOW MUST REMAIN IN CORRECT ORDER SINCE CALLED BELOW BY POSITION #

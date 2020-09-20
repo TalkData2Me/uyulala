@@ -198,7 +198,8 @@ def AddFeatures(asset=''):
         features = uyulala.autocorrelation(df=features,windowSize=3,colToAvg='High',lag=3)
         features = uyulala.autocorrelation(df=features,windowSize=2,colToAvg='High',lag=2)
         features = uyulala.autocorrelation(df=features,windowSize=2,colToAvg='High',lag=1)
-        features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
+        ##features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
+        features = features.rename(columns = dict([(i,'feat_'+i) for i in ['Open','High','Low','Close','Volume']]))
         features = features.dropna()
         features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
         features = None
