@@ -306,6 +306,35 @@ def expectPositiveReturn(df=None, horizon=7):
     tempDF[fieldName] = tempDF.apply(lambda x: False if x[fieldName]!=True else x[fieldName],axis=1)
     return tempDF.drop(['nextDayOpen','highest','lowest','ithDayhighest','ithDaylowest'], 1)
 
+def expectedReturnPct(df=None, horizon=7):
+    '''
+    Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column
+    '''
+    import logging
+    logging.info('running percentChange')
+    try:
+        import pandas
+        import numpy
+        import math
+    except:
+        logging.critical('need pandas and numpy.')
+        return
+    tempDF = df.copy()
+    tempDF['nextDayOpen'] = tempDF.Open.shift(-1)
+    tempDF['highest'] = tempDF.High.shift(-1)[::-1].rolling(window=horizon,center=False).max()
+    tempDF['lowest'] = tempDF.Low.shift(-1)[::-1].rolling(window=horizon,center=False).min()
+    tempDF = tempDF.dropna()
+    fieldName = 'lab_expectedReturnPct_H{}'.format(horizon)
+    tempDF[fieldName]=''
+    for i in [j+1 for j in range(horizon)]:
+        tempDF['ithDayhighest'] = tempDF.High.shift(-1)[::-1].rolling(window=i,center=False).max()
+        tempDF['ithDaylowest'] = tempDF.Low.shift(-1)[::-1].rolling(window=i,center=False).min()
+        tempDF[fieldName] = tempDF.apply(lambda x: False if x['lowest'] == x['ithDaylowest'] and x[fieldName]!=True else x[fieldName],axis=1)
+        tempDF[fieldName] = tempDF.apply(lambda x: True if x['highest'] == x['ithDayhighest'] and x[fieldName]!=False else x[fieldName],axis=1)
+    tempDF[fieldName] = tempDF.apply(lambda x: False if x[fieldName]!=True else x[fieldName],axis=1)
+    tempDF[fieldName] = tempDF.apply(lambda x: 'n'+str(math.ceil(100.000000000000*(x['lowest']-x['nextDayOpen'])/x['nextDayOpen'])) if x[fieldName]==False else 'p'+str(math.floor(100.000000000000*(x['highest']-x['nextDayOpen'])/x['nextDayOpen'])),axis=1)
+    return tempDF.drop(['nextDayOpen','highest','lowest','ithDayhighest','ithDaylowest'], 1)
+
 def weights(df=None, horizon=7,weightForIncrease=1,weightForDecrease=2):
     '''
     Expects a pandas dataframe in standard OHLCV format. Returns dataframe with new column
