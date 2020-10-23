@@ -461,7 +461,7 @@ def RSI(df=None,priceCol='Close',windowSize=14):
     tempDF['rsiLoss']=tempDF['rsiChange'].apply(lambda x: 1.00000000*x if x<0 else 0).abs()
     tempDF['rsiAvgGain']=tempDF['rsiGain'].rolling(window=windowSize,center=False).sum() / windowSize
     tempDF['rsiAvgLoss']=tempDF['rsiLoss'].rolling(window=windowSize,center=False).sum() / windowSize
-    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100.00000000 if (x.rsiAvgLoss<0.00000000001 or x.rsiAvgLoss>-0.00000000001) else 0.00000000 if (x.rsiAvgGain<0.00000000001 or x.rsiAvgGain>-0.00000000001) else 100.00000000-(100.00000000/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
+    tempDF['feat_RSI'+str(windowSize)] = tempDF.apply(lambda x: 100.00000000 if (x.rsiAvgLoss<0.00000000001 and x.rsiAvgLoss>-0.00000000001) else 0.00000000 if (x.rsiAvgGain<0.00000000001 and x.rsiAvgGain>-0.00000000001) else 100.00000000-(100.00000000/(1+(x.rsiAvgGain/x.rsiAvgLoss))),axis=1)
     tempDF.drop(['rsiChange','rsiGain','rsiLoss','rsiAvgGain','rsiAvgLoss'],inplace=True,axis=1)
     return tempDF
 

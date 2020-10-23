@@ -84,17 +84,20 @@ folderName = 'Assets-'+assets+'--Hrzn-'+str(horizon)
 print('Removing existing data to be replaced')
 
 try:
-    [ os.remove(os.path.join(uyulala.dataDir,'raw',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'raw',folderName)) if f.endswith(".csv") ]
+    shutil.rmtree(os.path.join(uyulala.dataDir,'raw',folderName))
+    os.makedirs(os.path.join(uyulala.dataDir,'raw',folderName))
 except:
     os.makedirs(os.path.join(uyulala.dataDir,'raw',folderName))
 
 try:
-    [ os.remove(os.path.join(uyulala.dataDir,'transformed',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed',folderName)) if f.endswith(".csv") ]
+    shutil.rmtree(os.path.join(uyulala.dataDir,'transformed',folderName))
+    os.makedirs(os.path.join(uyulala.dataDir,'transformed',folderName))
 except:
     os.makedirs(os.path.join(uyulala.dataDir,'transformed',folderName))
 
 try:
-    [ os.remove(os.path.join(uyulala.dataDir,'transformed_pca',folderName,f)) for f in os.listdir(os.path.join(uyulala.dataDir,'transformed_pca',folderName)) if f.endswith(".csv") ]
+    shutil.rmtree(os.path.join(uyulala.dataDir,'transformed_pca',folderName))
+    os.makedirs(os.path.join(uyulala.dataDir,'transformed_pca',folderName))
 except:
     os.makedirs(os.path.join(uyulala.dataDir,'transformed_pca',folderName))
 
@@ -139,12 +142,12 @@ def AddFeatures(asset=''):
         features = uyulala.PROC(df=features, colToAvg='High',windowSize=2)
         features = uyulala.PROC(df=features, colToAvg='High',windowSize=3)
         features = uyulala.DOW(df=features,dateCol='DateCol')
-        features = uyulala.RSI(df=features,priceCol='Close',windowSize=17)
-        features = uyulala.RSI(df=features,priceCol='Close',windowSize=13)
-        features = uyulala.RSI(df=features,priceCol='Close',windowSize=11)
         features = uyulala.RSIgranular(df=features,windowSize=7)
         features = uyulala.RSIgranular(df=features,windowSize=5)
         features = uyulala.RSIgranular(df=features,windowSize=3)
+        features = uyulala.RSI(df=features,priceCol='Close',windowSize=17)
+        features = uyulala.RSI(df=features,priceCol='Close',windowSize=13)
+        features = uyulala.RSI(df=features,priceCol='Close',windowSize=11)
         features = uyulala.SMARatio(df=features,colToAvg='Close',windowSize1=11,windowSize2=19)
         features = uyulala.SMARatio(df=features,colToAvg='Close',windowSize1=5,windowSize2=11)
         features = uyulala.SMARatio(df=features,colToAvg='Close',windowSize1=3,windowSize2=7)
@@ -201,7 +204,10 @@ def AddFeatures(asset=''):
         ##features.drop(['Open','High','Low','Close','Volume'],inplace=True,axis=1)
         features = features.rename(columns = dict([(i,'feat_'+i) for i in ['Open','High','Low','Close','Volume']]))
         features = features.dropna()
-        features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
+        features['YearMo'] = features['DateCol'].dt.strftime('%Y%m')
+        features['Asset'] = features['Symbol']
+        features.to_parquet(os.path.join(uyulala.dataDir,'transformed',folderName),index=False,partition_cols=['YearMo','Asset'])
+        #features.to_csv(os.path.join(uyulala.dataDir,'transformed',folderName,asset+'.csv'),index=False)
         features = None
         return asset
     except:
