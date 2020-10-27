@@ -58,7 +58,7 @@ def assetList(assets='Test'):
     elif assets == 'SchwabETFs':
         return ['SCHK','SCHB','SCHX','SCHD','SCHM','SCHA','SCHG','SCHV','SCHH','FNDB','FNDX','FNDA','SCHF','SCHC','SCHE','FNDF','FNDC','FNDE','SCHI','SCHJ','SCHZ','SCHO','SCHR','SCHQ','SCHP']
     else:
-        return ['CHIX', 'QQQC', 'SDEM','ABCDEFG']
+        return ['FB', 'AAPL', 'AMZN','NFLX','GOOG','ABCDEFG']
 
 
 
